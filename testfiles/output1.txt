@@ -1,0 +1,10 @@
+23371234
+func1
+func2
+func3
+2 func4
+func1
+x = 2
+s = 10
+m1 = 20
+sum = 30

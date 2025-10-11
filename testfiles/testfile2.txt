@@ -1,0 +1,122 @@
+const int i1 = 1;
+const int i2[5] = {1, 1, 1, 1, 1};
+const int i3 = 1, i4 = 1 + 1;
+int i6 = 1;
+int i7[2] = {1, 1};
+int i8 = 1, i9 = +1;
+
+void func1()
+{
+}
+
+void func2(int a, int b)
+{
+    printf("%d\n", a + b);
+}
+
+void func3(int a[], int b[], int len)
+{
+    int i = 0;
+    for (; i < len; i = i + 1)
+    {
+        if (a[i] != b[i])
+        {
+            break;
+        }
+        else
+        {
+            continue;
+        }
+    }
+    printf("func3\n");
+}
+
+void func4(int a[], int b[])
+{
+    int ans = 0;
+    ans = a[0] + b[0] - b[0] * a[0];
+    ans = ans / a[0] % b[0];
+    ans = ans + (a[0] / b[0] + a[0] - b[0] * a[0]);
+    printf("ans=%d func4\n", ans);
+}
+
+int func5(int a)
+{
+    a;
+    return a;
+}
+
+int main()
+{
+    printf("23371234\n");
+    int mid[5];
+    mid[0] = 1;
+    mid[1] = 1;
+    mid[2] = 1;
+    mid[3] = 1;
+    mid[4] = 1;
+    const int aka[5] = {1, 1, 1, 1, 1};
+    func1();
+    func2(i1, i3); //  1+1=2
+    func3(mid, mid, 5);
+    func4(mid, mid); //  ans=1
+
+    int x;
+    x = getint(); //  1
+    if (x != 2)
+    {
+        x = 2;
+
+        if (x == i4)
+        {
+            for (;;)
+            {
+
+                if (mid[2] == 1)
+                {
+                    x = x + 1; // x = 3
+                    break;
+                }
+            }
+        }
+        printf("%d\n", x); //  3
+
+        int i5[4];
+        i5[0] = 0;
+        i5[1] = 0;
+        i5[2] = 0;
+        i5[3] = 0;
+        for (; x > 0; x = x - 1) // x 3 - 1
+        {
+            if (x < 4)
+            {
+                i5[x - 1] = 1; // i5[2]=1, i5[1]=1, i5[0]=1
+            }
+        }
+        printf("%d\n", i5[0]); //  1
+
+        {
+            int ans = 1;
+            ans = i5[0] - func5(1) * i5[0] / ans + (ans % 1 + i5[0]); // 1-1*1/1+(0+1) = 1
+            ans = ans * 2;                                            // ans = 2
+            printf("%d\n", ans);                                      //  2
+
+            if (ans == 2)
+            {
+                if (ans == 1)
+                {
+                    ans = 2;
+                }
+                else
+                {
+                    ans = 1;
+                }
+            }
+            printf("%d\n", ans); //  1
+        }
+
+        printf("%d\n", aka[0]);     //  1
+        printf("%d\n", aka[0] + 1); //  2
+    }
+    return 0;
+}

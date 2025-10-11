@@ -1,0 +1,10 @@
+23371234
+func1
+1 func2
+1 func3
+a+b[0]=2 func4
+a[0]+b[0]=2 func5
+a+b=2 func6
+a+b=2 func6
+c[2] = 3
+16

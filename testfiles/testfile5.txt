@@ -1,0 +1,68 @@
+const int i1 = 1;
+const int i2 = 1 + 0;
+const int i3 = 2, i4 = 2 * 1;
+int a = 1;
+int b = 2, c = 3;
+int d = 4;
+int e = 5, f;
+int main()
+{
+    printf("23371234\n");
+    a = 11;
+    ;
+    a + 1;
+    {
+        printf("%d\n", a); // 11
+    }
+    if (1)
+    {
+        b = 22;
+    }
+    printf("%d\n", b); // 22
+    if (!1)
+    {
+        b = 222;
+    }
+    else
+    {
+        b = 2222;
+    }
+    printf("%d\n", b); // 2222
+    for (c = 0; c <= 3; c = c + 1)
+    {
+        d = d * 10;
+    }
+    printf("%d\n", d); // 40000
+    for (e = 0, f = 0; e <= 5; e = e + 1)
+    {
+        f = f + 1;
+    }
+    f = f + 1;
+    printf("%d\n", f); // 6
+    int g = 0;
+    for (; g <= 7; g = g + 1)
+    {
+        if (g == 1)
+        {
+            g = 7;
+            continue;
+        }
+    }
+    printf("%d\n", g); // 7
+    int h = 0;
+    for (; h <= 7;)
+    {
+        h = h + 1;
+    }
+    printf("%d\n", h); // 8
+    for (;;)
+    {
+        break;
+    }
+    int i = -1;
+    i = i + 1;
+    printf("%d\n", i); // 0
+    i = i + i * i + i / 2 - (i - i) * (i + i + i) + i % 1;
+    printf("%d\n", i); // 0
+    return 0;
+}

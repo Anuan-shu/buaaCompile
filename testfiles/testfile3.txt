@@ -1,0 +1,105 @@
+int i1;
+int i2 = 1;
+int i3[1] = {0};
+int i4[2] = {1, 2};
+int i5, i6;
+int i7 = 1, i8 = 1;
+int i9[2] = {1, 1}, i10 = 1;
+const int i11[2] = {1, 1};
+const int i12[2] = {1, 1};
+int i13 = 1;
+const int i14 = 1;
+const int i15 = 1, i16 = 1;
+void func1()
+{
+    printf("func1\n");
+    return;
+}
+
+void func2(int a)
+{
+    printf("%d func2\n", a);
+    return;
+}
+
+void func3(int a[])
+{
+    printf("%d func3\n", a[0]);
+    return;
+}
+
+void func4(int a, int b[])
+{
+    int c = a + b[0];
+    printf("a+b[0]=%d func4\n", c);
+    return;
+}
+
+int func5(int a[], int b[])
+{
+    int c[2];
+    c[0] = a[0] + b[0];
+    c[1] = a[1] + b[1];
+    printf("a[0]+b[0]=%d func5\n", c[0]);
+    return c[0];
+}
+
+int func6(int a, int b)
+{
+    const int c = a + b;
+    printf("a+b=%d func6\n", c);
+    return c;
+}
+
+int func7(int a)
+{
+    return a;
+}
+
+int main()
+{
+    printf("23371234\n");
+    func1();
+
+    int a = 1;
+    func2(a);
+
+    int b[2] = {1, 1};
+    func3(b);
+
+    func4(a, b);
+    int c[4];
+    c[0] = 1;
+    c[1] = 1;
+    c[2] = 1;
+    const int func5Ans = func5(b, c); // func5Ans = 2
+    if (2 == func5Ans)
+    {
+        c[2] = func6(b[0], c[0]); // c[2]=b[0]+c[0]=2
+    }
+    if (c[2] == b[0] + c[0]) // 2 == 1 + 1
+    {
+        c[2] = func6(func7(1), b[0]); //  c[2]=1+b[0]=2
+    }
+    if (c[1] == 1)
+    {
+        if (c[2] == 2)
+        {
+        }
+    }
+    if (c[0] == 1)
+    {
+        c[2] = 3;
+    }
+
+    printf("c[2] = %d\n", c[2]); // c[2]  3
+    i1 = 0;
+    i2 = 0;
+    i3[0] = 0;
+    i5 = 0;
+    i6 = 0;
+    int ii = i1 + i2 + i3[0] + i4[0] + i4[1] + i5 + i6 + i7 + i8 + i9[0] + i9[1] + i10 + i11[0] + i11[1] + i12[0] + i12[1] + i13 + i14 + i15 + i16;
+    printf("%d\n", ii); // 10. 0+0+0+1+2+0+0+1+1+1+1+1+1+1+1+1+1+1+1+1=16
+
+    return 0;
+}

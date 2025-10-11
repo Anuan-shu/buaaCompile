@@ -1,0 +1,84 @@
+void func1()
+{
+    return;
+}
+int func2(int a)
+{
+    return a;
+}
+int func3(int a, int b)
+{
+    return a + b;
+}
+int main()
+{
+    printf("23371234\n");
+    int x = 1;
+    int y = 2;
+    func1();
+    int a = func2(x);
+    int b = func3(x, y);
+    printf("%d\n", a); // 1
+    printf("%d\n", b); // 3
+    int c;
+    c = (a + b) * x;
+    printf("%d\n", c); // 4
+    int d;
+    d = c / 2;
+    printf("%d\n", d); // 2
+    int e = d % 2;
+    printf("%d\n", e); // 0
+    int f = b - a;
+    printf("%d\n", f); // 2
+    if (e != f)
+    {
+        f = 10;
+    }
+    printf("%d\n", f); // 10
+    if (f > e)
+    {
+        e = 10;
+    }
+    if (e >= f)
+    {
+        e = 9;
+    }
+    printf("%d\n", e); // 9
+    if (e <= f)
+    {
+        ;
+    }
+    if (e < f)
+    {
+        e = 10;
+    }
+    printf("%d %d\n", e, f); // 10 10
+    int i= 0;
+    for(;;i=i+1){
+        if(i>=1){
+            break;
+        }
+    }
+
+    int j=0;
+    for(j=0;;){
+        if(j>=1){
+            break;
+        }
+        j=j+1;
+    }
+
+    int k=0;
+    for(k=0;;k=k+1){
+        if(k>=1){
+            break;
+        }
+    }
+
+    int l=0;
+    for(l=0;l<3;){
+        l=l+1;
+    }
+
+    return 0;
+}
