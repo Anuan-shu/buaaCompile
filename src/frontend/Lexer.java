@@ -6,6 +6,7 @@ import java.util.ArrayList;
 public class Lexer {
     private final FileInputStream file;
     private final ArrayList<Token> tokens = new ArrayList<>();
+    private final ArrayList<Error> errors = new ArrayList<>();
     private int currentLine = 1;
     private char currentChar = ' ';
 
@@ -18,12 +19,15 @@ public class Lexer {
     public ArrayList<Token> getTokens() {
         return this.tokens;
     }
+    public ArrayList<Error> getErrors() {
+        return this.errors;
+    }
     public int getCurrentLine() {
         return this.currentLine;
     }
 
     public void analyse() {
-        Token currentToken = null;
+        Token currentToken;
         while ((currentToken = getToken()) != null) {
             tokens.add(currentToken);
         }
@@ -41,6 +45,7 @@ public class Lexer {
             e.printStackTrace();
         }
     }
+
     private Token getToken(){
         StringBuilder lexeme = new StringBuilder();
         skipWhitespace();
@@ -62,6 +67,60 @@ public class Lexer {
                 isRBrack(currentChar)||isLBrace(currentChar)||isRBrace(currentChar)){
             // 处理单字符运算符或分隔符
             return handleSingle(lexeme);
+        }else if(isEqual(currentChar)||isLess(currentChar)||isGreater(currentChar)||isNot(currentChar)) {
+            // 处理=
+            return handleEqualOrAssign(lexeme);
+        }else if(isEOF(currentChar)) {
+            return null;
+        }else if(isAnd(currentChar)) {
+            return handleAnd(lexeme);
+        }else if(isOr(currentChar)) {
+            return handleOr(lexeme);
+        }else {
+            // 未知字符，跳过并记录错误
+            errors.add(new Error(Error.ErrorType.a, currentLine, "not known"));
+            getChar();
+            return getToken();
+        }
+    }
+
+    private Token handleOr(StringBuilder lexeme) {
+        lexeme.append(currentChar);
+        getChar();
+        if(!isOr(currentChar)){
+            errors.add(new Error(Error.ErrorType.a, currentLine, "a"));
+        }else {
+            lexeme.append(currentChar);
+            getChar();
+        }
+        return new Token(Token.TokenType.OR, lexeme.toString(), currentLine);
+    }
+
+    private Token handleAnd(StringBuilder lexeme) {
+        lexeme.append(currentChar);
+        getChar();
+        if(!isAnd(currentChar)){
+            errors.add(new Error(Error.ErrorType.a, currentLine, "a"));
+        }else {
+            lexeme.append(currentChar);
+            getChar();
+        }
+        return new Token(Token.TokenType.AND, lexeme.toString(), currentLine);
+    }
+
+    private Token handleEqualOrAssign(StringBuilder lexeme) {
+        lexeme.append(currentChar);
+        getChar();
+        if(isEqual(currentChar)){
+            // ==
+            lexeme.append(currentChar);
+            getChar();
+            String lexemeStr  = lexeme.toString();
+            return new Token(turn2tokenType(lexemeStr), lexeme.toString(), currentLine);
+        }else{
+            // =
+            String lexemeStr  = lexeme.toString();
+            return new Token(turn2tokenType(lexemeStr), lexeme.toString(), currentLine);
         }
     }
 
@@ -198,6 +257,24 @@ public class Lexer {
     private boolean isQuote(char ch) {
         return ch == '"';
     }
+    private boolean isEOF(char ch) {
+        return ch == '\0';
+    }
+    private boolean isLess(char ch) {
+        return ch == '<';
+    }
+    private boolean isGreater(char ch) {
+        return ch == '>';
+    }
+    private boolean isNot(char ch) {
+        return ch == '!';
+    }
+    private boolean isAnd(char ch) {
+        return ch == '&';
+    }
+    private boolean isOr(char ch) {
+        return ch == '|';
+    }
 
     private void skipWhitespace() {
         while (isSpace(currentChar)) {
@@ -207,6 +284,7 @@ public class Lexer {
             getChar();
         }
     }
+
     public Token.TokenType turn2tokenType(String s) {
         return switch (s) {
             case "const" -> Token.TokenType.CONSTTK;
