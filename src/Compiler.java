@@ -1,4 +1,5 @@
 import frontend.Lexer;
+import frontend.Parser.Parser;
 
 import java.io.FileInputStream;
 import java.io.FileWriter;
@@ -6,24 +7,19 @@ import java.io.FileWriter;
 public class Compiler {
     public static void main(String[] args) {
         String testfile = "testfile.txt";//输入文件
-        String lexerfile = "lexer.txt";//输出文件
+        String lexerfile = "parser.txt";//输出文件
         String errorfile = "error.txt";//错误文件
 
         try {
             FileInputStream fis = new FileInputStream(testfile);
             Lexer lexer = new Lexer(fis);
             lexer.analyse();
-
-            writeTokensToFile(lexerfile,lexer);
-
-            writeErrorsToFile(errorfile,lexer);
+            Parser parser = new Parser(lexer.getTokens());
+            parser.analyse();
 
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-
-
     }
 
     private static void writeErrorsToFile(String errorfile, Lexer lexer) {

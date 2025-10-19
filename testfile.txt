@@ -1,0 +1,64 @@
+int i;
+int ii=0;
+int main() {
+	printf("22373340\n");
+	i=1;
+	if(i==1){
+		printf("if 1 condition\n");
+	}
+	if(i>=1){
+		printf("if 1 condition\n");
+	}else{
+		printf("if 1 else\n");
+	}
+	if(i<=1){
+		printf("if 1 condition\n");
+	}else{
+		printf("if 1 else\n");
+	}
+	if(i!=1){
+		printf("if 1 condition\n");
+	}else{
+		printf("if 1 else\n");
+	}
+	if(i<1){
+		printf("if 1 condition\n");
+	}else{
+		printf("if 1 else\n");
+	}
+	if(i>1){
+		printf("if 1 condition\n");
+	}else{
+		printf("if 1 else\n");
+	}
+
+	for(i=0;i<10;i=i+1){
+		if(i==0){
+			printf("continue test\n");
+			continue;
+		}
+		printf("The %d time run for\n",i);
+		if(i==9){
+			printf("break test\n");
+			break;
+		}
+	}
+
+	const int i1 = 1;
+	const int c1 = 114;
+	const int ii1 = 1, ii2 = 2;
+	const int cc1 = 114, cc2 = 514;
+
+	int i2;
+	int c2;
+	int ii3, ii4;
+	int cc3, cc4;
+	i2 = 1+1;
+	i2 = 1*1;
+	i2 = 1/1;
+	i2 = 1-1;
+	i2 = 1%2;
+	i2 = (1+1)*i2;
+	i2 = (114+3)/(1+1);
+	return 0;
+}

@@ -32,7 +32,6 @@ public class Token {
     public int getLine() {
         return line;
     }
-
     @Override
     public String toString() {
         return this.lexeme;
