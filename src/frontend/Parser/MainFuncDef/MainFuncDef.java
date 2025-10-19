@@ -36,7 +36,8 @@ public class MainFuncDef extends Node {
         }
         // Block
         Block block = new Block(GrammarType.Block,this.getIndex(),this.getTokens());
-        this.addChild(block);block.parser();
+        this.addChild(block);
+        block.parser();
 
 
         this.printTypeToFile();//MainFuncDef

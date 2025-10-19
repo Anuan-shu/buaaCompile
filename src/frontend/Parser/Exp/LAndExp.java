@@ -1,5 +1,6 @@
 package frontend.Parser.Exp;
 
+import frontend.Error;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
@@ -20,8 +21,12 @@ public class LAndExp extends Node {
         eqExp.parser();
         if(this.peekToken(0).getLexeme().equals("&&")){
             this.printTypeToFile();// LAndExp
+        }else if(this.peekToken(0).getLexeme().equals("&")){
+            Error error = new Error(Error.ErrorType.a,this.peekToken(-1).getLine(),"a");
+            this.printToError(error);
         }
-        while (this.peekToken(0).getLexeme().equals("&&")) {
+        while (this.peekToken(0).getLexeme().equals("&&")||
+        this.peekToken(0).getLexeme().equals("&")) {
             // '&&'
             ConstToken andToken = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(andToken);
@@ -32,6 +37,9 @@ public class LAndExp extends Node {
             eqExp2.parser();
             if(this.peekToken(0).getLexeme().equals("&&")){
                 this.printTypeToFile();// LAndExp
+            }else if(this.peekToken(0).getLexeme().equals("&")){
+                Error error = new Error(Error.ErrorType.a,this.peekToken(-1).getLine(),"a");
+                this.printToError(error);
             }
         }
 

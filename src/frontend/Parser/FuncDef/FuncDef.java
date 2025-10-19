@@ -30,7 +30,7 @@ public class FuncDef extends Node {
         this.addChild(leftParen);
         leftParen.parser();
         // [FuncFParams]
-        if (!this.peekToken(0).getLexeme().equals(")")) {
+        if (this.peekToken(0).getLexeme().equals("int")) {
             FuncFParams funcFParams = new FuncFParams(GrammarType.FuncFParams, this.getIndex(), this.getTokens());
             this.addChild(funcFParams);
             funcFParams.parser();

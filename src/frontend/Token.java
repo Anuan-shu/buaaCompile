@@ -14,6 +14,7 @@ public class Token {
     private final TokenType type;
     private final String lexeme;
     private final int line;
+    private boolean isPrinted = false;
 
     public Token(TokenType type, String lexeme, int line) {
         this.type = type;
@@ -31,6 +32,13 @@ public class Token {
 
     public int getLine() {
         return line;
+    }
+
+    public boolean isPrinted() {
+        return isPrinted;
+    }
+    public void setPrinted(boolean printed) {
+        isPrinted = printed;
     }
     @Override
     public String toString() {

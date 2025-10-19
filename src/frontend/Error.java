@@ -1,5 +1,8 @@
 package frontend;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class Error {
     public enum ErrorType {
         a,b,c,d,e,f,g,h,i,j,k,l,m
@@ -26,7 +29,6 @@ public class Error {
     public String getMessage() {
         return message;
     }
-
 
     @Override
     public String toString() {

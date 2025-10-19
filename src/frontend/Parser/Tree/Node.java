@@ -84,10 +84,14 @@ public class  Node {
         }
     }
     public void printToError(Error error) {
+        if(this.peekToken(-1)==null||this.peekToken(-1).isPrinted()){
+            return;
+        }
         try {
             FileWriter writer = new FileWriter(ErrorFilename, true);
             writer.write(error.toString() + "\n");
             writer.close();
+            this.peekToken(-1).setPrinted(true);
         } catch (IOException e) {
             e.printStackTrace();
         }
