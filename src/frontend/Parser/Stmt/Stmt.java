@@ -181,7 +181,16 @@ public class Stmt extends Node {
                 semicolon.parser();
             }
         }else{
-            if(this.peekToken(1).getLexeme().equals("=")) {
+            int i=0;
+            boolean flag=false;
+            while (!this.peekToken(i).getLexeme().equals(";")){
+                if(this.peekToken(i).getLexeme().equals("=")){
+                    flag=true;
+                    break;
+                }
+                i++;
+            }
+            if(flag) {
                 // LVal '=' Exp ';'
                 LVal lVal = new LVal(GrammarType.LVal,this.getIndex(),this.getTokens());
                 this.addChild(lVal);
