@@ -62,4 +62,35 @@ public class ComUnit extends Node {
                token.getLexeme().equals("const") ||
                token.getLexeme().equals("static");
     }
+
+    public ArrayList<Decl> GetDecls() {
+        ArrayList<Decl> decls = new ArrayList<>();
+        for(Node child:this.getChildren()){
+            if(child instanceof Decl){
+                decls.add((Decl)child);
+            }
+        }
+        return decls;
+    }
+
+    public ArrayList<FuncDef> GetFuncDefs() {
+        ArrayList<FuncDef> funcDefs = new ArrayList<>();
+        for(Node child:this.getChildren()){
+            if(child instanceof FuncDef){
+                funcDefs.add((FuncDef)child);
+            }
+        }
+        return funcDefs;
+    }
+
+    public MainFuncDef GetMainFuncDef() {
+        MainFuncDef mainFuncDef = null;
+        for(Node child:this.getChildren()){
+            if(child instanceof MainFuncDef){
+                mainFuncDef = (MainFuncDef)child;
+                break;
+            }
+        }
+        return mainFuncDef;
+    }
 }

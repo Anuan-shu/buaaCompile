@@ -6,6 +6,7 @@ import frontend.Parser.Stmt.ConstInitVal;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;
@@ -62,5 +63,16 @@ public class ConstDef extends Node {
         this.printTypeToFile();//ConstDef
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+    public String GetIdent() {
+        return this.getChildren().getFirst().getTokenAt(0).getLexeme();
+    }
+
+    public SymbolType GetSymbolType() {
+        if(this.getChildren().get(1).getTokenAt(0).getLexeme().equals("=")) {
+            return SymbolType.CONST_INT;
+        }else {
+            return SymbolType.CONST_INT_ARRAY;
+        }
     }
 }

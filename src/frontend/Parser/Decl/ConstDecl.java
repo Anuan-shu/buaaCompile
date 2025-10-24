@@ -61,4 +61,16 @@ public class ConstDecl extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public ArrayList<ConstDef> GetConstDefs() {
+        ArrayList<ConstDef> constDefs = new ArrayList<>();
+
+        for(Node child : this.getChildren()) {
+            if(child.getType() == GrammarType.ConstDef) {
+                constDefs.add((ConstDef) child);
+            }
+        }
+
+        return constDefs;
+    }
 }

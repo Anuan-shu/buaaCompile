@@ -6,6 +6,7 @@ import frontend.Parser.Stmt.InitVal;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;
@@ -59,5 +60,18 @@ public class VarDef extends Node {
         this.printTypeToFile();// VarDef
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public String GetIdent() {
+        return this.getChildren().getFirst().getTokenAt(0).getLexeme();
+    }
+
+    public SymbolType GetSymbolType() {
+        int childrenSize = this.getChildren().size();
+        if(childrenSize%2==0){
+            return SymbolType.INT_ARRAY;
+        }else {
+            return SymbolType.INT;
+        }
     }
 }

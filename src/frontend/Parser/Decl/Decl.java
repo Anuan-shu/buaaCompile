@@ -29,4 +29,16 @@ public class Decl extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public boolean isConstDecl() {
+        return this.getChildren().getFirst().getType() == GrammarType.ConstDecl;
+    }
+
+    public ConstDecl getConstDecl() {
+        return (ConstDecl) this.getChildren().getFirst();
+    }
+
+    public VarDecl getVarDecl() {
+        return (VarDecl) this.getChildren().getFirst();
+    }
 }

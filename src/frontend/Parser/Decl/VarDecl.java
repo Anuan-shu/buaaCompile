@@ -55,4 +55,17 @@ public class VarDecl extends Node {
         parent.setIndex(this.getIndex());
 
     }
+
+    public ArrayList<VarDef> GetVarDefs() {
+        ArrayList<VarDef> varDefs = new ArrayList<>();
+        for (Node child : this.getChildren()) {
+            if (child.getType() == GrammarType.VarDef) {
+                varDefs.add((VarDef) child);
+            }
+        }
+        return varDefs;
+    }
+    public boolean isStatic(){
+        return this.getChildren().getFirst().getTokenAt(0).getLexeme().equals("static");
+    }
 }
