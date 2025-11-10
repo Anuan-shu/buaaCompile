@@ -56,6 +56,8 @@ public class ConstDecl extends Node {
             // 错误处理，缺少分号
             Error error = new Error(Error.ErrorType.i,this.peekToken(-1).getLine(), "i");
             this.printToError(error);
+            ConstToken semicolonToken = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
+            this.addChild(semicolonToken);
         }
         this.printTypeToFile();//ConstDecl
         Node parent = this.getParent();

@@ -5,6 +5,9 @@ import frontend.Parser.Exp.Exp;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Symbol.GlobalSymbolTable;
+import frontend.Symbol.Symbol;
+import frontend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;
@@ -37,6 +40,8 @@ public class LVal extends Node {
                 //错误处理，缺少右括号
                 frontend.Error error = new frontend.Error(Error.ErrorType.k,this.peekToken(-1).getLine(), "k");
                 this.printToError(error);
+                ConstToken rightBracket = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
+                this.addChild(rightBracket);
             }else {
                 ConstToken rightBracket = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
                 this.addChild(rightBracket);
@@ -46,5 +51,38 @@ public class LVal extends Node {
         this.printTypeToFile();
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public String getIdent() {
+        return this.getChildren().get(0).getToken().getLexeme();
+    }
+
+    public int GetLineNumber() {
+        return this.getChildren().get(0).getToken().getLine();
+    }
+
+    public SymbolType getExpType() {
+        if(this.getChildren().size()==4){
+            return SymbolType.CONST_INT;
+        }
+        //查符号表
+        String ident = this.getIdent();
+        Symbol symbolExp = GlobalSymbolTable.searchSymbolByIdent(ident);
+        if(symbolExp!=null){
+            return symbolExp.GetSymbolType();
+        }else{
+            return SymbolType.NOT_EXIST;
+        }
+    }
+
+    public boolean hasIndexExp() {
+        return this.getChildren().size()==4;
+    }
+
+    public Exp getIndexExp() {
+        if(this.hasIndexExp()){
+            return (Exp)this.getChildren().get(2);
+        }
+        return null;
     }
 }

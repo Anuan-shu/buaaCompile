@@ -1,7 +1,46 @@
-int main()
-{
-    int a=(5+3
-    int b
-    int c;
+// 语言：C-like
+int main() {
+    int normal_var_1 = 0;
+    int normal_var_2 = 0;
+    const int THE_CONST_A = 100;
+    const int THE_CONST_B = 200;
+    int i = 0;
+
+    // --- 测试点 1: for 循环初始化语句 ---
+    // 这里的 ForStmt 是 "normal_var_1 = 1, THE_CONST_A = 5"
+    // `normal_var_1 = 1` 是合法的。
+    // `THE_CONST_A = 5` 是非法的。
+    // 如果您的编译器只检查了第一项，就会漏掉这里的 h 错误。
+    // 这极有可能是您在 testcase13 第 5 行遇到的真实情况。
+    for (normal_var_1 = 1, THE_CONST_A = 5; i < 2; i = i + 1) { // h: 第16行, 错误。在多重赋值列表中修改了常量 THE_CONST_A
+        int dummy_var = 0;
+    }
+
+
+    // --- 测试点 2: for 循环迭代表达式 ---
+    // 这里的 ForStmt 是 "normal_var_2 = i, THE_CONST_B = i"
+    // `normal_var_2 = i` 是合法的。
+    // `THE_CONST_B = i` 是非法的。
+    // 这测试了 for 循环的第三部分是否也存在同样的 bug。
+    for (i = 0; i < 2; i = i + 1, THE_CONST_B = i) { // h: 第26行, 错误。在多重赋值列表中修改了常量 THE_CONST_B
+        int dummy_var_2 = 0;
+    }
+
+
+    // --- 测试点 3: 更复杂的组合 ---
+    // 混合了多个合法和非法赋值，并加入了作用域覆盖来增加迷惑性
+    {
+        const int normal_var_1 = 999; // 覆盖外部的 normal_var_1
+        int another_var = 0;
+
+        // 这里 'normal_var_1' 是内部的常量， 'THE_CONST_A' 是外部的常量。
+        // `another_var = 1` 是合法的。
+        for (another_var = 1, normal_var_1 = 5, THE_CONST_A = 10; i < 2; i = i + 1) {
+            // h: 第39行, 错误。 'normal_var_1' 是当前作用域的常量。
+            // h: 第39行, 错误。 'THE_CONST_A' 是外部作用域的常量。
+            // 您的编译器应该至少报一个 h 错误，理想情况下会报两个。
+        }
+    }
+
     return 0;
 }

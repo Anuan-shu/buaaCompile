@@ -1,7 +1,7 @@
 package frontend;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.io.FileWriter;
+import java.io.IOException;
 
 public class Error {
     public enum ErrorType {
@@ -33,5 +33,16 @@ public class Error {
     @Override
     public String toString() {
         return line + " " + message;
+    }
+    public void printToError(Error error) {
+        try {
+            String errorFilename = "VisitError.txt";
+            FileWriter writer = new FileWriter(errorFilename, true);
+            writer.write(error.toString() + "\n");
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        GlobalError.addError(this);
     }
 }

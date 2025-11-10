@@ -5,6 +5,7 @@ import frontend.Parser.Token.BType;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;
@@ -35,6 +36,8 @@ public class FuncFParam extends Node {
                 //错误处理，缺少右括号
                 frontend.Error error = new frontend.Error(Error.ErrorType.k,this.peekToken(-1).getLine(), "k");
                 this.printToError(error);
+                ConstToken rightBracket = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
+                this.addChild(rightBracket);
             }else {
                 ConstToken rightBracket = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
                 this.addChild(rightBracket);
@@ -44,5 +47,21 @@ public class FuncFParam extends Node {
         this.printTypeToFile();//FuncFParam
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public String GetIdentName() {
+        return this.getChildren().get(1).getToken().getLexeme();
+    }
+
+    public SymbolType GetSymbolType() {
+        if(this.getChildren().size() != 2) {
+            return SymbolType.INT_ARRAY;
+        } else {
+            return SymbolType.INT;
+        }
+    }
+
+    public int GetLineNumber() {
+        return this.getChildren().get(1).getToken().getLine();
     }
 }

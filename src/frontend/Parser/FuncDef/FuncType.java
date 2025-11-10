@@ -25,4 +25,8 @@ public class FuncType extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public boolean isFuncTypeIsVoid(){
+        return this.getChildren().get(0).getToken().getLexeme().equals("void");
+    }
 }

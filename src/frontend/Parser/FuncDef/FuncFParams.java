@@ -32,4 +32,12 @@ public class FuncFParams extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public int GetChildCount() {
+        return this.getChildren().size();
+    }
+
+    public FuncFParam GetChildAsFuncFParam(int i) {
+        return (FuncFParam) this.getChildren().get(i);
+    }
 }

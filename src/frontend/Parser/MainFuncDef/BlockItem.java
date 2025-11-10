@@ -12,7 +12,7 @@ public class BlockItem extends Node {
     public BlockItem(GrammarType type,int index, ArrayList<Token> tokens) {
         super(type,index,tokens);
     }
-
+    private boolean isForBody = false;
     public void parser() {
         //块项 BlockItem → Decl | Stmt
         if (isDeclStart(this.peekToken(0))) {
@@ -24,6 +24,9 @@ public class BlockItem extends Node {
             //Stmt
              Stmt stmt = new Stmt(GrammarType.Stmt,this.getIndex(), this.getTokens());
              this.addChild(stmt);
+            if(isForBody){
+                stmt.setIsForBody(true);
+            }
              stmt.parser();
         }
         Node parent = this.getParent();
@@ -31,12 +34,22 @@ public class BlockItem extends Node {
     }
 
     private boolean isDeclStart(Token token) {
-       if(token.getLexeme().equals("const") ||
-                 token.getLexeme().equals("int") ||
-               token.getLexeme().equals("static")) {
-            return true;
-        }else {
-            return false;
-       }
+        return token.getLexeme().equals("const") || token.getLexeme().equals("int") || token.getLexeme().equals("static");
+    }
+
+    public boolean isDecl() {
+        return this.getChildren().get(0).getTypeName().equals("Decl");
+    }
+
+    public Decl GetChildAsDecl(int i) {
+        return (Decl) this.getChildren().get(i);
+    }
+
+    public Stmt GetChildAsStmt(int i) {
+        return (Stmt) this.getChildren().get(i);
+    }
+
+    public void setIsForBody(boolean b) {
+        this.isForBody = b;
     }
 }

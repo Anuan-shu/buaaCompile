@@ -29,9 +29,12 @@ public class MainFuncDef extends Node {
         if(!this.peekToken(0).getLexeme().equals(")")){
             frontend.Error error = new frontend.Error(Error.ErrorType.j, this.peekToken(-1).getLine(),"j");
             this.printToError(error);
+            ConstToken rParentToken = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
+            this.addChild(rParentToken);
         }else {
             ConstToken rParentToken = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
-            this.addChild(rParentToken);rParentToken.parser();
+            this.addChild(rParentToken);
+            rParentToken.parser();
 
         }
         // Block
@@ -43,5 +46,9 @@ public class MainFuncDef extends Node {
         this.printTypeToFile();//MainFuncDef
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public Block GetBlock() {
+        return (Block)this.getChildren().get(4);
     }
 }

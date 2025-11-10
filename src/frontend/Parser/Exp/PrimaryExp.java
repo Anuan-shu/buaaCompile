@@ -5,6 +5,7 @@ import frontend.Parser.Stmt.LVal;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.lang.Number;
@@ -32,6 +33,8 @@ public class PrimaryExp extends Node {
             if(!this.peekToken(0).getLexeme().equals(")")){
                 frontend.Error error = new frontend.Error(Error.ErrorType.j, this.peekToken(-1).getLine(),"j");
                 this.printToError(error);
+                ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
+                this.addChild(rightParen);
             }else {
                 ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
                 this.addChild(rightParen);
@@ -51,5 +54,27 @@ public class PrimaryExp extends Node {
         this.printTypeToFile();// PrimaryExp
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public Exp GetChildAsExp() {
+        return (Exp)this.getChildren().get(1);
+    }
+
+    public boolean IsChildLVal() {
+        return this.getChildren().get(0).getType().equals(GrammarType.LVal);
+    }
+
+    public LVal GetChildAsLVal() {
+        return (LVal)this.getChildren().get(0);
+    }
+
+    public SymbolType getExpType() {
+        if(this.IsChildLVal()) {
+            return this.GetChildAsLVal().getExpType();
+        } else if(this.getChildren().get(0).getType().equals(GrammarType.Number)) {
+            return SymbolType.CONST_INT;
+        }else{
+            return this.GetChildAsExp().getExpType();
+        }
     }
 }

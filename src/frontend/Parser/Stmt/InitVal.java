@@ -56,4 +56,22 @@ public class InitVal extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public boolean isExp() {
+        return this.getChildren().get(0).getType().equals(GrammarType.Exp);
+    }
+
+    public Exp getExp() {
+        return (Exp)this.getChildren().get(0);
+    }
+
+    public ArrayList<Exp> getExpList() {
+        ArrayList<Exp> expList = new ArrayList<>();
+        for(Node child : this.getChildren()) {
+            if(child.getType().equals(GrammarType.Exp)) {
+                expList.add((Exp)child);
+            }
+        }
+        return expList;
+    }
 }

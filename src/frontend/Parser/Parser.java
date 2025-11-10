@@ -14,6 +14,9 @@ public class Parser {
         this.root = new ComUnit(GrammarType.CompUnit,0, tokens);
         this.errors = new ArrayList<>();
     }
+    public ComUnit getRoot() {
+        return root;
+    }
     public void analyse() {
         root.parser();
     }

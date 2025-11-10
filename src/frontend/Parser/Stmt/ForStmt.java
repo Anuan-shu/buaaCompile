@@ -52,4 +52,14 @@ public class ForStmt extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public ArrayList<LVal> getLVals() {
+        ArrayList<LVal> lVals = new ArrayList<>();
+        for (Node child : this.getChildren()) {
+            if (child.getType() == GrammarType.LVal) {
+                lVals.add((LVal) child);
+            }
+        }
+        return lVals;
+    }
 }

@@ -31,14 +31,14 @@ public class Decl extends Node {
     }
 
     public boolean isConstDecl() {
-        return this.getChildren().getFirst().getType() == GrammarType.ConstDecl;
+        return this.getChildren().get(0).getType() == GrammarType.ConstDecl;
     }
 
     public ConstDecl getConstDecl() {
-        return (ConstDecl) this.getChildren().getFirst();
+        return (ConstDecl) this.getChildren().get(0);
     }
 
     public VarDecl getVarDecl() {
-        return (VarDecl) this.getChildren().getFirst();
+        return (VarDecl) this.getChildren().get(0);
     }
 }

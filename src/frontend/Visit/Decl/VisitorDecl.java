@@ -15,9 +15,11 @@ public class VisitorDecl {
     }
 
     private static void VisitVarDecl(VarDecl varDecl) {
+        //变量声明 VarDecl → [ 'static' ] BType VarDef { ',' VarDef } ';'
         ArrayList<VarDef> varDefs = varDecl.GetVarDefs();
         boolean isStatic = varDecl.isStatic();
         for(VarDef vardef : varDefs) {
+            VisitorVarDef.VisitVarDef(vardef);
             GlobalSymbolTable.addVarDef(vardef,isStatic);
         }
 

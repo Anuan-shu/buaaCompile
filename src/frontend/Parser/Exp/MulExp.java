@@ -3,6 +3,7 @@ package frontend.Parser.Exp;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;
@@ -44,5 +45,25 @@ public class MulExp extends Node {
         this.printTypeToFile();// MulExp
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public UnaryExp GetFirstChildAsUnaryExp() {
+        return (UnaryExp) this.getChildren().get(0);
+    }
+
+    public UnaryExp GetChildAsUnaryExpByIndex(int i) {
+        return (UnaryExp) this.getChildren().get(i);
+    }
+
+    public boolean getExpType() {
+        for(int i =0;i<this.getChildren().size();i+=2){
+            UnaryExp unaryExp = this.GetChildAsUnaryExpByIndex(i);
+            if(unaryExp.getExpType().equals(SymbolType.CONST_INT_ARRAY)||
+            unaryExp.getExpType().equals(SymbolType.STATIC_INT_ARRAY)||
+            unaryExp.getExpType().equals(SymbolType.INT_ARRAY)){
+                return true;
+            }
+        }
+        return false;
     }
 }

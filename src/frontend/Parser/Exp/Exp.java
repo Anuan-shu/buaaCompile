@@ -2,6 +2,7 @@ package frontend.Parser.Exp;
 
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;
@@ -19,5 +20,13 @@ public class Exp extends Node {
         this.printTypeToFile();
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public AddExp GetChildAsAddExp() {
+        return (AddExp) this.getChildren().get(0);
+    }
+
+    public SymbolType getExpType() {
+        return this.GetChildAsAddExp().getExpType();
     }
 }

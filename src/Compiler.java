@@ -1,8 +1,16 @@
+import frontend.Error;
+import frontend.GlobalError;
 import frontend.Lexer;
 import frontend.Parser.Parser;
+import frontend.Symbol.GlobalSymbolTable;
+import frontend.Symbol.Symbol;
+import frontend.Symbol.SymbolTable;
+import frontend.Visit.Visitor;
 
 import java.io.FileInputStream;
 import java.io.FileWriter;
+import java.util.ArrayList;
+import java.util.Comparator;
 
 public class Compiler {
     public static void main(String[] args) {
@@ -16,7 +24,30 @@ public class Compiler {
             lexer.analyse();
             Parser parser = new Parser(lexer.getTokens());
             parser.analyse();
+            Visitor visitor = new Visitor(parser.getRoot());
+            visitor.Visit();
+            writeSymbolTableToFile("symbol.txt");
+            writeAllErrorsToFile(errorfile);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
+    private static void writeAllErrorsToFile(String errorfile) {
+        try {
+            FileWriter writer = new FileWriter(errorfile);
+            ArrayList<Error> allErrors = GlobalError.getErrors();
+            //按行号从小到大输出
+            allErrors.sort(Comparator.comparingInt(Error::getLine));
+            for (Error error : allErrors) {
+                if(GlobalError.isPrinted(error.getLine())){
+                    continue;
+                }
+                writer.write(error + "\n");
+                GlobalError.setPrinted(error.getLine());
+            }
+
+            writer.close();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -42,6 +73,41 @@ public class Compiler {
             }
             writer.close();
         } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void writeSymbolTableToFile(String symbolFile){
+        try {
+            FileWriter writer = new FileWriter(symbolFile);
+            SymbolTable currentTable = GlobalSymbolTable.getGlobalSymbolTable();
+            while (currentTable != null) {
+                if(currentTable.getIsWrite()){
+                    if(currentTable.hasNextSonTable()){
+                        currentTable = currentTable.GetNextSonTable();
+                    }else{
+                        currentTable = currentTable.getFatherTable();
+                    }
+                }else{
+                    int dep = currentTable.GetDepth();
+                    if(dep==0){
+                        break;
+                    }
+                    for (Symbol symbol : currentTable.GetSymbolList()) {
+                        writer.write(dep+" "+symbol.GetSymbolName()+" "+symbol.GetSymbolType().getTypeName()+"\n");
+                        //System.out.println(dep+" "+symbol.GetSymbolName()+" "+ symbol.GetSymbolType().getTypeName());
+                    }
+                    currentTable.setWrite(true);
+                    if(currentTable.hasNextSonTable()){
+                        currentTable = currentTable.GetNextSonTable();
+                    }else{
+                        currentTable = currentTable.getFatherTable();
+                    }
+                }
+            }
+            writer.close();
+        }
+        catch (Exception e) {
             e.printStackTrace();
         }
     }

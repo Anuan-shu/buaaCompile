@@ -11,6 +11,12 @@ import frontend.Token;
 import java.util.ArrayList;
 
 public class Stmt extends Node {
+    private Node currentTypeNode=this;
+    private boolean isForBody=false;
+    public void setIsForBody(boolean isForBody) {
+        this.isForBody = isForBody;
+    }
+
     public Stmt(GrammarType type,int index, ArrayList<Token> tokens) {
         super(type,index,tokens);
     }
@@ -26,6 +32,7 @@ public class Stmt extends Node {
             ConstToken ifToken = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(ifToken);
             ifToken.parser();
+            currentTypeNode = ifToken;
             // '('
             ConstToken leftParen = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(leftParen);
@@ -38,6 +45,8 @@ public class Stmt extends Node {
             if(!this.peekToken(0).getLexeme().equals(")")){
                 frontend.Error error = new frontend.Error(Error.ErrorType.j, this.peekToken(-1).getLine(),"j");
                 this.printToError(error);
+                ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
+                this.addChild(rightParen);
             }else {
                 ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
                 this.addChild(rightParen);
@@ -46,7 +55,11 @@ public class Stmt extends Node {
             // Stmt
             Stmt thenStmt = new Stmt(GrammarType.Stmt,this.getIndex(),this.getTokens());
             this.addChild(thenStmt);
+            if(isForBody){
+                thenStmt.setIsForBody(true);
+            }
             thenStmt.parser();
+
             // [ 'else' Stmt ]
             if(this.peekToken(0).getLexeme().equals("else")) {
                 ConstToken elseToken = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
@@ -55,18 +68,27 @@ public class Stmt extends Node {
 
                 Stmt elseStmt = new Stmt(GrammarType.Stmt,this.getIndex(),this.getTokens());
                 this.addChild(elseStmt);
+                if(isForBody){
+                    elseStmt.setIsForBody(true);
+                }
                 elseStmt.parser();
+
             }
         } else if(this.peekToken(0).getLexeme().equals("{")) {
             //块语句
             Block blockStmt = new Block(GrammarType.Block,this.getIndex(),this.getTokens());
             this.addChild(blockStmt);
+            if(isForBody){
+                blockStmt.setIsForBody(true);
+            }
             blockStmt.parser();
+            currentTypeNode = blockStmt;
         }else if(this.peekToken(0).getLexeme().equals("for")) {
             //for语句
             ConstToken forToken = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(forToken);
             forToken.parser();
+            currentTypeNode = forToken;
             // '('
             ConstToken leftParen = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(leftParen);
@@ -103,6 +125,7 @@ public class Stmt extends Node {
             rightParen.parser();
             // Stmt
             Stmt bodyStmt = new Stmt(GrammarType.Stmt,this.getIndex(),this.getTokens());
+            bodyStmt.setIsForBody(true);
             this.addChild(bodyStmt);
             bodyStmt.parser();
         } else if(this.peekToken(0).getLexeme().equals("break") ||
@@ -111,10 +134,13 @@ public class Stmt extends Node {
             ConstToken jumpToken = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(jumpToken);
             jumpToken.parser();
+            currentTypeNode = jumpToken;
             // ';'
             if(!this.peekToken(0).getLexeme().equals(";")) {
-                frontend.Error error = new frontend.Error(Error.ErrorType.i,this.peekToken(-1).getLine(), "i");
+                Error error = new frontend.Error(Error.ErrorType.i,this.peekToken(-1).getLine(), "i");
                 this.printToError(error);
+                ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
+                this.addChild(semicolon);
             }else {
                 ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
                 this.addChild(semicolon);
@@ -124,6 +150,7 @@ public class Stmt extends Node {
             ConstToken returnToken = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(returnToken);
             returnToken.parser();
+            currentTypeNode = returnToken;
             // [Exp]
             if(!this.peekToken(0).getLexeme().equals(";")) {
                 Exp returnExp = new Exp(GrammarType.Exp,this.getIndex(),this.getTokens());
@@ -134,6 +161,8 @@ public class Stmt extends Node {
             if(!this.peekToken(0).getLexeme().equals(";")) {
                 Error error = new Error(Error.ErrorType.i,this.peekToken(-1).getLine(), "i");
                 this.printToError(error);
+                ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
+                this.addChild(semicolon);
             }else {
                 ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
                 this.addChild(semicolon);
@@ -143,6 +172,7 @@ public class Stmt extends Node {
             ConstToken printfToken = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(printfToken);
             printfToken.parser();
+            currentTypeNode = printfToken;
             // '('
             ConstToken leftParen = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(leftParen);
@@ -166,6 +196,8 @@ public class Stmt extends Node {
             if(!this.peekToken(0).getLexeme().equals(")")){
                 frontend.Error error = new frontend.Error(Error.ErrorType.j, this.peekToken(-1).getLine(),"j");
                 this.printToError(error);
+                ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
+                this.addChild(rightParen);
             }else {
                 ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
                 this.addChild(rightParen);
@@ -175,6 +207,8 @@ public class Stmt extends Node {
             if(!this.peekToken(0).getLexeme().equals(";")) {
                 Error error = new Error(Error.ErrorType.i,this.peekToken(-1).getLine(), "i");
                 this.printToError(error);
+                ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
+                this.addChild(semicolon);
             }else {
                 ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
                 this.addChild(semicolon);
@@ -195,6 +229,7 @@ public class Stmt extends Node {
                 LVal lVal = new LVal(GrammarType.LVal,this.getIndex(),this.getTokens());
                 this.addChild(lVal);
                 lVal.parser();
+                currentTypeNode = lVal;
                 // '='
                 ConstToken assignToken = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
                 this.addChild(assignToken);
@@ -207,6 +242,8 @@ public class Stmt extends Node {
                 if(!this.peekToken(0).getLexeme().equals(";")) {
                     Error error = new Error(Error.ErrorType.i,this.peekToken(-1).getLine(), "i");
                     this.printToError(error);
+                    ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
+                    this.addChild(semicolon);
                 }else {
                     ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
                     this.addChild(semicolon);
@@ -221,11 +258,13 @@ public class Stmt extends Node {
                 Exp exp = new Exp(GrammarType.Exp,this.getIndex(),this.getTokens());
                 this.addChild(exp);
                 exp.parser();
-
+                currentTypeNode = exp;
                 // ';'
                 if(!this.peekToken(0).getLexeme().equals(";")) {
                     Error error = new Error(Error.ErrorType.i,this.peekToken(-1).getLine(), "i");
                     this.printToError(error);
+                    ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
+                    this.addChild(semicolon);
                 }else {
                     ConstToken semicolon = new ConstToken(GrammarType.Token, this.getIndex(),this.getTokens());
                     this.addChild(semicolon);
@@ -236,5 +275,129 @@ public class Stmt extends Node {
         this.printTypeToFile();// Stmt
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public boolean isBlock() {
+        return currentTypeNode.getTypeName().equals("Block");
+    }
+
+    public Block GetChildAsBlock() {
+        return (Block) this.getChildren().get(0);
+    }
+
+    public boolean isIfStmt() {
+        return this.getChildren().get(0).getType().equals(GrammarType.Token) &&
+                this.getChildren().get(0).getToken().getLexeme().equals("if");
+    }
+
+    public Stmt GetIfStmtChildAsStmt() {
+        return (Stmt) this.getChildren().get(4);
+    }
+
+    public boolean HasElseStmt() {
+        return this.getChildren().size() == 7;
+    }
+
+    public Stmt GetElseStmtChildAsStmt() {
+        return (Stmt) this.getChildren().get(6);
+    }
+
+    public boolean isForStmt() {
+        return this.getChildren().get(0).getType().equals(GrammarType.Token) &&
+                this.getChildren().get(0).getToken().getLexeme().equals("for");
+    }
+
+    public Stmt GetForStmtChildAsStmt() {
+        for(Node child : this.getChildren()) {
+            if(child.getType().equals(GrammarType.Stmt)) {
+                return (Stmt) child;
+            }
+        }
+        return null;
+    }
+
+    public boolean isReturn() {
+        return this.getChildren().get(0).getType().equals(GrammarType.Token) &&
+                this.getChildren().get(0).getToken().getLexeme().equals("return");
+    }
+
+    public boolean isLVal() {
+        return currentTypeNode.getTypeName().equals("LVal");
+    }
+
+    public LVal GetChildAsLVal() {
+        return (LVal) currentTypeNode;
+    }
+
+    public ArrayList<ForStmt> GetChildAsForStmt() {
+        ArrayList<ForStmt> forStmts = new ArrayList<>();
+        for(Node child : this.getChildren()) {
+            if(child.getType().equals(GrammarType.ForStmt)) {
+                forStmts.add((ForStmt) child);
+            }
+        }
+        return forStmts;
+    }
+
+    public boolean isBreakContinue() {
+        return this.getChildren().get(0).getType().equals(GrammarType.Token) &&
+                (this.getChildren().get(0).getToken().getLexeme().equals("break")
+                ||this.getChildren().get(0).getToken().getLexeme().equals("continue"));
+    }
+
+    public boolean isForBody() {
+        return isForBody;
+    }
+
+    public int GetJumpLineNumber() {
+        return this.getChildren().get(0).getToken().getLine();
+    }
+
+    public boolean ReturnHasValue() {
+        return this.getChildren().get(1).getType()==GrammarType.Exp;
+    }
+
+    public Exp GetReturnExp() {
+        return (Exp) this.getChildren().get(1);
+    }
+
+    public int GetReturnLine() {
+        return this.getChildren().get(0).getToken().getLine();
+    }
+
+    public boolean isPrintf() {
+        return this.getChildren().get(0).getType().equals(GrammarType.Token) &&
+                this.getChildren().get(0).getToken().getLexeme().equals("printf");
+    }
+
+
+    public String GetStringConst() {
+        return this.getChildren().get(2).getToken().getLexeme();
+    }
+
+    public ArrayList<Exp> GetExps() {
+        ArrayList<Exp> exps = new ArrayList<>();
+        for(Node child : this.getChildren()) {
+            if(child.getType().equals(GrammarType.Exp)) {
+                exps.add((Exp) child);
+            }
+        }
+        return exps;
+    }
+
+    public int GetPrintLine() {
+        return this.getChildren().get(0).getToken().getLine();
+    }
+
+    public boolean isExp() {
+        return currentTypeNode.getTypeName().equals("Exp");
+    }
+
+    public Exp GetLValRExpChildAsExp() {
+        return (Exp) this.getChildren().get(2);
+    }
+
+    public Exp GetExpChildAsExp() {
+        return (Exp) currentTypeNode;
     }
 }

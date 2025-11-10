@@ -45,6 +45,8 @@ public class VarDecl extends Node {
         if(!this.peekToken(0).getLexeme().equals(";")) {
             Error error = new Error(Error.ErrorType.i,this.peekToken(-1).getLine(), "i");
             this.printToError(error);
+            ConstToken semicolonToken = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
+            this.addChild(semicolonToken);
         }else {
             ConstToken semicolonToken = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
             this.addChild(semicolonToken);
@@ -66,6 +68,7 @@ public class VarDecl extends Node {
         return varDefs;
     }
     public boolean isStatic(){
-        return this.getChildren().getFirst().getTokenAt(0).getLexeme().equals("static");
+        return this.getChildren().get(0).getType() == GrammarType.Token &&
+                this.getChildren().get(0).getToken().getLexeme().equals("static");
     }
 }

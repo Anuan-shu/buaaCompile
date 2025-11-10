@@ -5,6 +5,9 @@ import frontend.Parser.FuncDef.FuncRParams;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Symbol.GlobalSymbolTable;
+import frontend.Symbol.Symbol;
+import frontend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;
@@ -49,8 +52,10 @@ public class UnaryExp extends Node {
 
             //)
             if(!this.peekToken(0).getLexeme().equals(")")){
-                frontend.Error error = new frontend.Error(Error.ErrorType.j, this.peekToken(-1).getLine(),"j");
+                Error error = new Error(Error.ErrorType.j, this.peekToken(-1).getLine(),"j");
                 this.printToError(error);
+                ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
+                this.addChild(rightParen);
             }else {
                 ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
                 this.addChild(rightParen);
@@ -66,5 +71,52 @@ public class UnaryExp extends Node {
         this.printTypeToFile();// UnaryExp
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public UnaryExp GetChildAsUnaryExpByIndex(int i) {
+        return (UnaryExp) this.getChildren().get(i);
+    }
+
+    public String GetChildAsFuncName() {
+        return this.getChildren().get(0).getToken().getLexeme();
+    }
+
+    public int GetFuncNameLine() {
+        return this.getChildren().get(0).getToken().getLine();
+    }
+
+    public FuncRParams GetChildAsFuncRParams() {
+        return (FuncRParams) this.getChildren().get(2);
+    }
+
+    public PrimaryExp GetFirstChildAsPrimaryExp() {
+        return (PrimaryExp) this.getChildren().get(0);
+    }
+
+    public SymbolType getExpType() {
+        if(this.getChildren().size() ==1) {
+            //PrimaryExp
+            return this.GetFirstChildAsPrimaryExp().getExpType();
+        } else if(this.getChildren().size() == 3 || this.getChildren().size() == 4) {
+            //Ident '(' [FuncRParams] ')'
+            String funcName = this.GetChildAsFuncName();
+            Symbol funcSymbol = GlobalSymbolTable.searchSymbolByIdent(funcName);
+            if(funcSymbol == null ) {
+                //函数未定义
+                Error error = new Error(Error.ErrorType.c, this.GetFuncNameLine(),"c");
+                error.printToError(error);
+                return SymbolType.NOT_EXIST;
+            }
+            //返回函数的返回值类型
+            if(funcSymbol.GetSymbolType() == SymbolType.VOID_FUNC) {
+                return SymbolType.NOT_EXIST;
+            }else {
+                return SymbolType.CONST_INT;
+            }
+
+        } else {
+            // UnaryOp UnaryExp
+            return this.GetChildAsUnaryExpByIndex(1).getExpType();
+        }
     }
 }

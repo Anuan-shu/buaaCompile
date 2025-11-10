@@ -5,6 +5,7 @@ import frontend.Parser.MainFuncDef.Block;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;
@@ -39,6 +40,8 @@ public class FuncDef extends Node {
         if(!this.peekToken(0).getLexeme().equals(")")){
             Error error = new Error(Error.ErrorType.j, this.peekToken(-1).getLine(),"j");
             this.printToError(error);
+            ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
+            this.addChild(rightParen);
         }else {
             ConstToken rightParen = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
             this.addChild(rightParen);
@@ -52,5 +55,43 @@ public class FuncDef extends Node {
         this.printTypeToFile();// FuncDef
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public boolean getFuncTypeIsVoid() {
+        FuncType funcType = (FuncType) this.getChildren().get(0);
+        return funcType.isFuncTypeIsVoid();
+    }
+
+    public String GetIdent() {
+        return this.getChildren().get(1).getToken().getLexeme();
+    }
+
+    public SymbolType GetSymbolType() {
+        if(this.getFuncTypeIsVoid()){
+            return SymbolType.VOID_FUNC;
+        }else {
+            return SymbolType.INT_FUNC;
+        }
+    }
+
+    public boolean HasFuncFParams() {
+        return this.getChildren().get(3).getType() == GrammarType.FuncFParams;
+    }
+
+    public FuncFParams GetFuncFParams() {
+        return (FuncFParams) this.getChildren().get(3);
+    }
+
+    public Block GetFuncBlock() {
+        for(Node child:this.getChildren()){
+            if(child.getType()== GrammarType.Block){
+                return (Block) child;
+            }
+        }
+        return null;
+    }
+
+    public int GetLineNumber() {
+        return this.getChildren().get(1).getToken().getLine();
     }
 }

@@ -11,7 +11,7 @@ public class Block extends Node {
     public Block(GrammarType type,int index, ArrayList<Token> tokens) {
         super(type,index, tokens);
     }
-
+    private boolean isForBody = false;
     public void parser() {
         //语句块 Block → '{' { BlockItem } '}'
         // '{'
@@ -22,6 +22,9 @@ public class Block extends Node {
         while (!this.peekToken(0).getLexeme().equals("}")) {
             BlockItem blockItem = new BlockItem(GrammarType.BlockItem,this.getIndex(), this.getTokens());
             this.addChild(blockItem);
+            if(this.isForBody){
+                blockItem.setIsForBody(true);
+            }
             blockItem.parser();
         }
         // '}'
@@ -31,5 +34,22 @@ public class Block extends Node {
         this.printTypeToFile();// Block
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
+    }
+
+    public int GetChildrenCount() {
+        return this.getChildren().size();
+    }
+
+    public BlockItem GetChildAsBlockItem(int i) {
+        return (BlockItem)this.getChildren().get(i);
+    }
+
+    public int GetLastLineNumber() {
+        int LastChild = this.GetChildrenCount()-1;
+        return this.getChildren().get(LastChild).getToken().getLine();
+    }
+
+    public void setIsForBody(boolean b) {
+        this.isForBody = b;
     }
 }

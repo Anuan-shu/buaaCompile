@@ -41,6 +41,8 @@ public class ConstDef extends Node {
             if(!this.peekToken(0).getLexeme().equals("]")) {
                 Error error = new Error(Error.ErrorType.k, this.peekToken(-1).getLine(), "k");
                 this.printToError(error);
+                ConstToken rightBracket = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
+                this.addChild(rightBracket);
             }else {
                 ConstToken rightBracket = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
                 rightBracket.setTokens(this.getTokens());
@@ -65,14 +67,18 @@ public class ConstDef extends Node {
         parent.setIndex(this.getIndex());
     }
     public String GetIdent() {
-        return this.getChildren().getFirst().getTokenAt(0).getLexeme();
+        return this.getChildren().get(0).getToken().getLexeme();
     }
 
     public SymbolType GetSymbolType() {
-        if(this.getChildren().get(1).getTokenAt(0).getLexeme().equals("=")) {
+        if(this.getChildren().get(1).getToken().getLexeme().equals("=")) {
             return SymbolType.CONST_INT;
         }else {
             return SymbolType.CONST_INT_ARRAY;
         }
+    }
+
+    public int GetLineNumber() {
+        return this.getChildren().get(0).getToken().getLine();
     }
 }

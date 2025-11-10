@@ -32,4 +32,12 @@ public class FuncRParams extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public int getLine() {
+        return this.peekToken(-1).getLine();
+    }
+
+    public Exp GetExpByIndex(int i) {
+        return (Exp)this.getChildren().get(i*2);
+    }
 }

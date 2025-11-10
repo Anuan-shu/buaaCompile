@@ -39,6 +39,10 @@ public class VarDef extends Node {
                 //错误处理，缺少右括号
                 Error error = new Error(Error.ErrorType.k,this.peekToken(-1).getLine(), "k");
                 this.printToError(error);
+                //自动补全
+                ConstToken rightBracket = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
+                this.addChild(rightBracket);
+
             }else{
             ConstToken rightBracket = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
             this.addChild(rightBracket);
@@ -63,7 +67,7 @@ public class VarDef extends Node {
     }
 
     public String GetIdent() {
-        return this.getChildren().getFirst().getTokenAt(0).getLexeme();
+        return this.getChildren().get(0).getToken().getLexeme();
     }
 
     public SymbolType GetSymbolType() {
@@ -73,5 +77,18 @@ public class VarDef extends Node {
         }else {
             return SymbolType.INT;
         }
+    }
+
+    public int GetLineNumber() {
+        return this.getChildren().get(0).getToken().getLine();
+    }
+
+    public boolean hasInitVal() {
+        int childrenSize = this.getChildren().size();
+        return childrenSize==3||childrenSize==6;
+    }
+
+    public InitVal GetInitVal() {
+        return (InitVal) this.getChildren().get(this.getChildren().size()-1);
     }
 }

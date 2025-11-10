@@ -1,6 +1,7 @@
 package frontend.Parser.Tree;
 
 import frontend.Error;
+import frontend.GlobalError;
 import frontend.Token;
 
 import java.io.FileWriter;
@@ -15,7 +16,7 @@ public class  Node {
     private int tokenIndex;
     private Token token;
     private final String filename="parser.txt";
-    private final String ErrorFilename="error.txt";
+    private final String ErrorFilename="ParserError.txt";
     public Node(GrammarType type,int tokenIndex, ArrayList<Token> tokens) {
         this.type = type;
         this.children = new ArrayList<>();
@@ -48,6 +49,8 @@ public class  Node {
     public void setTokens(ArrayList<Token> tokens) {
         this.tokens = tokens;
     }
+
+    // 获取指定索引的Token
     public Token getTokenAt(int index) {
         if (tokens == null || index < 0 || index >= tokens.size()) {
             return null;
@@ -55,6 +58,7 @@ public class  Node {
         return tokens.get(index);
     }
 
+    // 查看相对于当前tokenIndex偏移offset的Token
     protected Token peekToken(int offset) {
         if (tokens == null) {
             return null;
@@ -78,7 +82,7 @@ public class  Node {
     public void printToFile() {
         //输出到filename
         try (FileWriter writer = new FileWriter(filename, true)) {
-            writer.write(token.getType()+" "+token.getLexeme() +"\n");
+            //writer.write(token.getType()+" "+token.getLexeme() +"\n");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -95,13 +99,18 @@ public class  Node {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        GlobalError.addError(error);
     }
     public void printTypeToFile(){
         //输出节点类型到filename
         try (FileWriter writer = new FileWriter(filename, true)) {
-            writer.write("<"+this.getTypeName() +">"+"\n");
+            //writer.write("<"+this.getTypeName() +">"+"\n");
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public Token getToken() {
+        return token;
     }
 }
