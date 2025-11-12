@@ -2,10 +2,10 @@ import frontend.Error;
 import frontend.GlobalError;
 import frontend.Lexer;
 import frontend.Parser.Parser;
-import frontend.Symbol.GlobalSymbolTable;
-import frontend.Symbol.Symbol;
-import frontend.Symbol.SymbolTable;
-import frontend.Visit.Visitor;
+import midend.Symbol.GlobalSymbolTable;
+import midend.Symbol.Symbol;
+import midend.Symbol.SymbolTable;
+import midend.Visit.Visitor;
 
 import java.io.FileInputStream;
 import java.io.FileWriter;
@@ -22,6 +22,8 @@ public class Compiler {
             FileInputStream fis = new FileInputStream(testfile);
             Lexer lexer = new Lexer(fis);
             lexer.analyse();
+//          writeTokensToFile(lexerfile,lexer);
+//          writeErrorsToFile(errorfile,lexer);
             Parser parser = new Parser(lexer.getTokens());
             parser.analyse();
             Visitor visitor = new Visitor(parser.getRoot());

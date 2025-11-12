@@ -2,7 +2,7 @@ package frontend.Parser.Exp;
 
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
-import frontend.Symbol.SymbolType;
+import midend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;

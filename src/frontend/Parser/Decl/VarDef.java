@@ -6,7 +6,7 @@ import frontend.Parser.Stmt.InitVal;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
-import frontend.Symbol.SymbolType;
+import midend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;

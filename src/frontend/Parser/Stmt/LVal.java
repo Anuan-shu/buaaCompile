@@ -5,9 +5,9 @@ import frontend.Parser.Exp.Exp;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
-import frontend.Symbol.GlobalSymbolTable;
-import frontend.Symbol.Symbol;
-import frontend.Symbol.SymbolType;
+import midend.Symbol.GlobalSymbolTable;
+import midend.Symbol.Symbol;
+import midend.Symbol.SymbolType;
 import frontend.Token;
 
 import java.util.ArrayList;
