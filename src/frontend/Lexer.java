@@ -89,6 +89,7 @@ public class Lexer {
         getChar();
         if(!isOr(currentChar)){
             errors.add(new Error(Error.ErrorType.a, currentLine, "a"));
+            GlobalError.addError(errors.get(errors.size()-1));
         }else {
             lexeme.append(currentChar);
             getChar();
@@ -101,6 +102,7 @@ public class Lexer {
         getChar();
         if(!isAnd(currentChar)){
             errors.add(new Error(Error.ErrorType.a, currentLine, "a"));
+            GlobalError.addError(errors.get(errors.size()-1));
         }else {
             lexeme.append(currentChar);
             getChar();
