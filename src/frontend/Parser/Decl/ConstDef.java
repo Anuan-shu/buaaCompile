@@ -81,4 +81,14 @@ public class ConstDef extends Node {
     public int GetLineNumber() {
         return this.getChildren().get(0).getToken().getLine();
     }
+
+    public int GetArraySize() {
+        ConstExp constExp = (ConstExp) this.getChildren().get(2);
+        return constExp.Evaluate();
+    }
+
+    public ArrayList<Integer> GetInitValues() {
+        ConstInitVal constInitVal = (ConstInitVal) this.getChildren().get(this.getChildren().size() - 1);
+        return constInitVal.GetInitValues();
+    }
 }

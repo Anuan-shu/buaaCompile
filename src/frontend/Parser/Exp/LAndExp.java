@@ -47,4 +47,14 @@ public class LAndExp extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public ArrayList<EqExp> GetEqExps() {
+        ArrayList<EqExp> eqExps = new ArrayList<>();
+        for (Node child : this.getChildren()) {
+            if (child.getType() == GrammarType.EqExp) {
+                eqExps.add((EqExp) child);
+            }
+        }
+        return eqExps;
+    }
 }

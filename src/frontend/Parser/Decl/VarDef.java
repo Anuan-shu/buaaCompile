@@ -89,6 +89,23 @@ public class VarDef extends Node {
     }
 
     public InitVal GetInitVal() {
-        return (InitVal) this.getChildren().get(this.getChildren().size()-1);
+        if(!this.hasInitVal()){
+            return null;
+        }
+        int childrenSize = this.getChildren().size();
+        return (InitVal) this.getChildren().get(childrenSize - 1);
+    }
+
+    public int GetArraySize() {
+        ConstExp constExp = (ConstExp) this.getChildren().get(2);
+        return constExp.Evaluate();
+    }
+
+    public ArrayList<Integer> GetInitValues() {
+        InitVal initVal = this.GetInitVal();
+        if(initVal==null){
+            return new ArrayList<>();
+        }
+        return initVal.Evaluate();
     }
 }

@@ -76,4 +76,18 @@ public class PrimaryExp extends Node {
             return this.GetChildAsExp().getExpType();
         }
     }
+
+    public int GetChildAsNumber() {
+        return Integer.parseInt(this.getChildren().get(0).getToken().getLexeme());
+    }
+
+    public int Evaluate() {
+        if(this.IsChildLVal()) {
+            return this.GetChildAsLVal().Evaluate();
+        } else if(this.getChildren().get(0).getType().equals(GrammarType.Number)) {
+            return this.GetChildAsNumber();
+        }else{
+            return this.GetChildAsExp().Evaluate();
+        }
+    }
 }

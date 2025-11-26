@@ -39,4 +39,29 @@ public class EqExp extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public ArrayList<RelExp> GetRelExps() {
+        ArrayList<RelExp> relExps = new ArrayList<>();
+        for (Node child : this.getChildren()) {
+            if (child.getType() == GrammarType.RelExp) {
+                relExps.add((RelExp) child);
+            }
+        }
+        return relExps;
+    }
+
+    public ArrayList<String> GetEqOps() {
+        ArrayList<String> eqOps = new ArrayList<>();
+        for (Node child : this.getChildren()) {
+            if (child.getType() == GrammarType.Token) {
+                String lexeme = ((ConstToken) child).getToken().getLexeme();
+                if (lexeme.equals("==") || lexeme.equals("!=")) {
+                    eqOps.add(lexeme);
+                }else {
+                    System.err.println("Error: Unexpected token in EqExp: " + lexeme);
+                }
+            }
+        }
+        return eqOps;
+    }
 }

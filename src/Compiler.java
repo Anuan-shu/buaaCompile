@@ -28,8 +28,10 @@ public class Compiler {
             parser.analyse();
             Visitor visitor = new Visitor(parser.getRoot());
             visitor.Visit();
-            writeSymbolTableToFile("symbol.txt");
-            writeAllErrorsToFile(errorfile);
+//            writeSymbolTableToFile("symbol.txt");
+//            writeAllErrorsToFile(errorfile);
+            visitor.llvmVisit();
+            visitor.writeLLVMToFile("llvm_ir.txt");
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -60,4 +60,25 @@ public class ConstInitVal extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public ArrayList<Integer> GetInitValues() {
+        ArrayList<Integer> initValues = new ArrayList<>();
+        if(this.getChildren().get(0).getType()==GrammarType.ConstExp) {
+            //ConstExp
+            ConstExp constExp = (ConstExp) this.getChildren().get(0);
+            int value = constExp.Evaluate();
+            initValues.add(value);
+        }else {
+            //'{'
+            int childCount = this.getChildren().size();
+            for(int i=1;i<childCount-1;i++) {
+                if(this.getChildren().get(i).getType()==GrammarType.ConstExp) {
+                    ConstExp constExp = (ConstExp) this.getChildren().get(i);
+                    int value = constExp.Evaluate();
+                    initValues.add(value);
+                }
+            }
+        }
+        return initValues;
+    }
 }

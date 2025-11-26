@@ -119,4 +119,33 @@ public class UnaryExp extends Node {
             return this.GetChildAsUnaryExpByIndex(1).getExpType();
         }
     }
+
+    public String GetOp() {
+        return this.getChildren().get(0).getToken().getLexeme();
+    }
+
+    public int Evaluate() {
+        if(this.getChildren().size() ==1) {
+            //PrimaryExp
+            PrimaryExp primaryExp = this.GetFirstChildAsPrimaryExp();
+            return primaryExp.Evaluate();
+        } else if(this.getChildren().size() == 3 || this.getChildren().size() == 4) {
+            //Ident '(' [FuncRParams] ')'
+            //函数调用，暂不支持函数返回值计算，返回0
+            return 0;
+        } else {
+            // UnaryOp UnaryExp
+            String op = this.GetOp();
+            UnaryExp unaryExp = this.GetChildAsUnaryExpByIndex(1);
+            int val = unaryExp.Evaluate();
+            if(op.equals("+")) {
+                return val;
+            } else if(op.equals("-")) {
+                return -val;
+            } else {
+                // '!'
+                return val ==0 ? 1 : 0;
+            }
+        }
+    }
 }

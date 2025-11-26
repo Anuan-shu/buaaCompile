@@ -59,4 +59,18 @@ public class AddExp extends Node {
         }
         return SymbolType.NOT_ARRAY;
     }
+
+    public int Evaluate() {
+        int result = this.GetFirstChildAsMulExp().Evaluate();
+        for (int i = 1; i < this.getChildren().size(); i += 2) {
+            ConstToken op = (ConstToken) this.getChildren().get(i);
+            MulExp mulExp = this.GetChildAsMulExpByIndex(i + 1);
+            if (op.getToken().getLexeme().equals("+")) {
+                result += mulExp.Evaluate();
+            } else if (op.getToken().getLexeme().equals("-")) {
+                result -= mulExp.Evaluate();
+            }
+        }
+        return result;
+    }
 }

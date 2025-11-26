@@ -47,4 +47,14 @@ public class LOrExp extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public ArrayList<LAndExp> GetLAndExps() {
+        ArrayList<LAndExp> lAndExps = new ArrayList<>();
+        for (Node child : this.getChildren()) {
+            if (child.getType() == GrammarType.LAndExp) {
+                lAndExps.add((LAndExp) child);
+            }
+        }
+        return lAndExps;
+    }
 }

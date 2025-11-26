@@ -74,4 +74,18 @@ public class InitVal extends Node {
         }
         return expList;
     }
+
+    public ArrayList<Integer> Evaluate() {
+        ArrayList<Integer> initValues = new ArrayList<>();
+        if(this.isExp()) {
+            Exp exp = this.getExp();
+            initValues.add(exp.Evaluate());
+        }else {
+            ArrayList<Exp> expList = this.getExpList();
+            for(Exp exp : expList) {
+                initValues.add(exp.Evaluate());
+            }
+        }
+        return initValues;
+    }
 }

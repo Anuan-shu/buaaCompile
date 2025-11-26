@@ -23,4 +23,8 @@ public class Cond extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public LOrExp GetLOrExp() {
+        return (LOrExp)this.getChildren().get(0);
+    }
 }

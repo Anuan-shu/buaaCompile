@@ -66,4 +66,20 @@ public class MulExp extends Node {
         }
         return false;
     }
+
+    public int Evaluate() {
+        int result = this.GetFirstChildAsUnaryExp().Evaluate();
+        for (int i = 1; i < this.getChildren().size(); i += 2) {
+            ConstToken op = (ConstToken) this.getChildren().get(i);
+            UnaryExp unaryExp = this.GetChildAsUnaryExpByIndex(i + 1);
+            if (op.getToken().getLexeme().equals("*")) {
+                result *= unaryExp.Evaluate();
+            } else if (op.getToken().getLexeme().equals("/")) {
+                result /= unaryExp.Evaluate();
+            } else if (op.getToken().getLexeme().equals("%")) {
+                result %= unaryExp.Evaluate();
+            }
+        }
+        return result;
+    }
 }

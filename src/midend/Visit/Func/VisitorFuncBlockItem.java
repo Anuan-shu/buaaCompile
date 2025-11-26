@@ -17,4 +17,16 @@ public class VisitorFuncBlockItem {
             return VisitorStmt.VisitStmt(blockItem.GetChildAsStmt(0),isNeedReturn);
         }
     }
+
+    public static void LLVMVisitFuncBlockItem(BlockItem blockItem) {
+        //BlockItem → Decl | Stmt
+
+        //Decl
+        if(blockItem.isDecl()){
+            VisitorDecl.LLVMVisitDecl(blockItem.GetChildAsDecl(0));
+        }else {
+            //Stmt
+            VisitorStmt.LLVMVisitStmt(blockItem.GetChildAsStmt(0));
+        }
+    }
 }

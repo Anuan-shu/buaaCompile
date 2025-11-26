@@ -3,8 +3,17 @@ package midend.Visit.Func;
 import frontend.Error;
 import frontend.Parser.Exp.Exp;
 import frontend.Parser.FuncDef.FuncRParams;
+import midend.LLVM.Instruction.CallInstr;
+import midend.LLVM.IrBuilder;
+import midend.LLVM.ValueType;
+import midend.LLVM.value.IrFunction;
+import midend.LLVM.value.IrValue;
+import midend.Symbol.GlobalSymbolTable;
 import midend.Symbol.Symbol;
 import midend.Symbol.SymbolType;
+import midend.Visit.Exp.VisitorExp;
+
+import java.util.ArrayList;
 
 public class VisitorFuncRParams {
     public static void VisitFuncRParams(FuncRParams funcRParams, Symbol funcSymbol) {
@@ -40,5 +49,26 @@ public class VisitorFuncRParams {
                 return;
             }
         }
+    }
+
+    public static IrValue LLVMVisitFuncRParams(String func,FuncRParams funcRParams) {
+        Symbol funcSymbol = GlobalSymbolTable.searchSymbolByIdent(func);
+        IrFunction irFunction = (IrFunction) funcSymbol.getIrValue();
+
+        ArrayList<IrValue> paramList = new ArrayList<>();
+        int numParams = funcRParams.getChildren().size()/2 + 1;
+        for (int i = 0; i < numParams; i++) {
+            Exp paramExp = funcRParams.GetExpByIndex(i);
+            paramList.add(VisitorExp.LLVMVisitExp(paramExp));
+        }
+
+        return IrBuilder.GetNewCallInstr(irFunction,paramList);
+    }
+    public static IrValue LLVMVisitFuncRParams(String func){
+        Symbol funcSymbol = GlobalSymbolTable.searchSymbolByIdent(func);
+        IrFunction irFunction = (IrFunction) funcSymbol.getIrValue();
+
+        ArrayList<IrValue> paramList = new ArrayList<>();
+        return IrBuilder.GetNewCallInstr(irFunction,paramList);
     }
 }

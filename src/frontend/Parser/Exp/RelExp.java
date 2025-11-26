@@ -42,4 +42,24 @@ public class RelExp extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public ArrayList<AddExp> GetAddExps() {
+        ArrayList<AddExp> addExps = new ArrayList<>();
+        for (Node child : this.getChildren()) {
+            if (child.getType() == GrammarType.AddExp) {
+                addExps.add((AddExp) child);
+            }
+        }
+        return addExps;
+    }
+
+    public ArrayList<String> GetRelOps() {
+        ArrayList<String> relOps = new ArrayList<>();
+        for (Node child : this.getChildren()) {
+            if (child.getType() == GrammarType.Token) {
+                relOps.add(((ConstToken) child).getToken().getLexeme());
+            }
+        }
+        return relOps;
+    }
 }

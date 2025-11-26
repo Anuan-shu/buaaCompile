@@ -24,11 +24,29 @@ public class GlobalSymbolTable {
         localSymbolTable=symbolTable;
     }
 
+    /**
+     * 进入子符号表
+    */
+    public static void enterSonSymbolTable(){
+        localSymbolTable= localSymbolTable.GetNextSonTable();
+    }
+    /**
+      * 回到父级作用域*/
+    public static void GoToFatherSymbolTable() {
+        localSymbolTable= localSymbolTable.getFatherTable();
+    }
+    public static boolean symbolIsArray(SymbolType symbolType){
+        return symbolType == SymbolType.INT_ARRAY || symbolType == SymbolType.STATIC_INT_ARRAY||symbolType==SymbolType.CONST_INT_ARRAY;
+    }
     public static void addConstDef(ConstDef constDef) {
         String Ident = constDef.GetIdent();
         SymbolType symbolType = constDef.GetSymbolType();
         int line = constDef.GetLineNumber();
         Symbol symbol=new Symbol(Ident,symbolType,line);
+        if(symbolIsArray(symbolType)){
+            symbol.setSize(constDef.GetArraySize());
+        }
+        symbol.setInitValues(constDef.GetInitValues());
         localSymbolTable.AddSymbol(symbol);
     }
 
@@ -44,6 +62,10 @@ public class GlobalSymbolTable {
         }
         int line = varDef.GetLineNumber();
         Symbol symbol=new Symbol(Ident,symbolType,line);
+        if(symbolIsArray(symbolType)){
+            symbol.setSize(varDef.GetArraySize());
+        }
+        symbol.setInitValues(varDef.GetInitValues());
         localSymbolTable.AddSymbol(symbol);
     }
 
@@ -69,5 +91,9 @@ public class GlobalSymbolTable {
             }
         }
         return null;
+    }
+
+    public static boolean isGlobalSymbol(Symbol constSymbol) {
+        return globalSymbolTable.containsSymbol(constSymbol);
     }
 }

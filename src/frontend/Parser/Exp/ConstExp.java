@@ -22,4 +22,10 @@ public class ConstExp extends Node {
         Node parent = this.getParent();
         parent.setIndex(this.getIndex());
     }
+
+    public int Evaluate() {
+        AddExp addExp = (AddExp)this.getChildren().get(0);
+        return addExp.Evaluate();
+    }
+
 }

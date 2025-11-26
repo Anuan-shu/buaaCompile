@@ -31,4 +31,27 @@ public class VisitorDecl {
             GlobalSymbolTable.addConstDef(constDef);
         }
     }
+
+    public static void LLVMVisitDecl(Decl decl) {
+        if(decl.isConstDecl()){
+            LLVMVisitConstDecl(decl.getConstDecl());
+        } else {
+            LLVMVisitVarDecl(decl.getVarDecl());
+        }
+    }
+
+    private static void LLVMVisitVarDecl(VarDecl varDecl) {
+        ArrayList<VarDef> varDefs = varDecl.GetVarDefs();
+        boolean isStatic = varDecl.isStatic();
+        for(VarDef vardef : varDefs) {
+            VisitorVarDef.LLVMVisitVarDef(vardef, isStatic);
+        }
+    }
+
+    private static void LLVMVisitConstDecl(ConstDecl constDecl) {
+        ArrayList<ConstDef> constDefs = constDecl.GetConstDefs();
+        for(ConstDef constDef : constDefs) {
+            VisitorConstDef.LLVMVisitConstDef(constDef);
+        }
+    }
 }

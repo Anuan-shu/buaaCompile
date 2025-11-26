@@ -400,4 +400,40 @@ public class Stmt extends Node {
     public Exp GetExpChildAsExp() {
         return (Exp) currentTypeNode;
     }
+
+    /**
+    * 前提为if时使用
+     * */
+    public Cond GetStmtChildAsCond() {
+        return (Cond) this.getChildren().get(2);
+    }
+
+    public ForStmt GetForInitStmt() {
+        if(this.getChildren().get(2).getType().equals(GrammarType.ForStmt)) {
+            return (ForStmt) this.getChildren().get(2);
+        }
+        return null;
+    }
+
+    public Cond GetForCond() {
+        for(Node child : this.getChildren()) {
+            if(child.getType().equals(GrammarType.Cond)) {
+                return (Cond) child;
+            }
+        }
+        return null;
+    }
+
+    public ForStmt GetForStepStmt() {
+        int index = this.getChildren().size()-3;
+        if(this.getChildren().get(index).getType().equals(GrammarType.ForStmt)) {
+            return (ForStmt) this.getChildren().get(index);
+        }
+        return null;
+    }
+
+    public boolean isBreak() {
+        return this.getChildren().get(0).getType().equals(GrammarType.Token) &&
+                this.getChildren().get(0).getToken().getLexeme().equals("break");
+    }
 }

@@ -1,6 +1,8 @@
 package midend.Visit.Exp;
 
 import frontend.Parser.Exp.PrimaryExp;
+import midend.LLVM.Const.IrConstInt;
+import midend.LLVM.value.IrValue;
 import midend.Visit.Stmt.VisitorLVal;
 
 public class VisitorPrimaryExp {
@@ -16,10 +18,27 @@ public class VisitorPrimaryExp {
             // LVal | Number
             if (primaryExp.IsChildLVal()) {
                 VisitorLVal.VisitLVal(primaryExp.GetChildAsLVal(),false);
-            } else {
-                // Number
-                //处理数字字面量
             }
         }
+    }
+
+    public static IrValue LLVMVisitPrimaryExp(PrimaryExp primaryExp) {
+        // PrimaryExp → '(' Exp ')' | LVal | Number
+        if (primaryExp == null) {
+            return null;
+        }
+        if (primaryExp.getChildren().size() == 3) {
+            // '(' Exp ')'
+            return VisitorExp.LLVMVisitExp(primaryExp.GetChildAsExp());
+        } else if (primaryExp.getChildren().size() == 1) {
+            // LVal | Number
+            if (primaryExp.IsChildLVal()) {
+                return VisitorLVal.LLVMVisitLVal(primaryExp.GetChildAsLVal(), false);
+            } else {
+                // Number
+                return new IrConstInt(primaryExp.GetChildAsNumber());
+            }
+        }
+        return null;
     }
 }

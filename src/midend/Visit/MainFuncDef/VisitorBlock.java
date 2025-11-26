@@ -18,4 +18,14 @@ public class VisitorBlock {
         //回到上一级作用域
         GlobalSymbolTable.setLocalSymbolTable(GlobalSymbolTable.getLocalSymbolTable().getFatherTable());
     }
+
+    public static void LLVMVisitBlock(Block block) {
+        //作用域加一
+        GlobalSymbolTable.enterSonSymbolTable();
+
+        VisitorFuncBlock.LLVMVisitFuncBlock(block);
+
+        //回到上一级作用域
+        GlobalSymbolTable.GoToFatherSymbolTable();
+    }
 }

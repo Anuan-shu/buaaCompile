@@ -20,4 +20,13 @@ public class VisitorFuncBlock {
             error.printToError(error);
         }
     }
+
+    public static void LLVMVisitFuncBlock(Block block) {
+        //语句块 Block → '{' { BlockItem } '}'
+        for(int i=0;i<block.GetChildrenCount();i++){
+            if(block.getChildren().get(i).getType().name().equals("BlockItem")){
+                VisitorFuncBlockItem.LLVMVisitFuncBlockItem(block.GetChildAsBlockItem(i));
+            }
+        }
+    }
 }

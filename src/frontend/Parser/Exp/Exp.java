@@ -29,4 +29,9 @@ public class Exp extends Node {
     public SymbolType getExpType() {
         return this.GetChildAsAddExp().getExpType();
     }
+
+    public int Evaluate() {
+        AddExp addExp = (AddExp)this.getChildren().get(0);
+        return addExp.Evaluate();
+    }
 }

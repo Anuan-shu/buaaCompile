@@ -1,0 +1,23 @@
+package midend.LLVM.Instruction;
+
+import midend.LLVM.Type.IrType;
+import midend.LLVM.ValueType;
+import midend.LLVM.value.IrValue;
+
+public class ReturnInstr extends Instruction {
+    private final IrValue returnValue;
+
+    public ReturnInstr(IrValue returnValue) {
+        super(ValueType.RETURN_INST, IrType.VOID, "return", InstructionType.RETURN);
+        this.returnValue = returnValue;
+        this.AddUseValue(returnValue);
+    }
+
+    public String toString() {
+        if (returnValue == null) {
+            return "ret void";
+        } else {
+            return "ret " + returnValue.irType.toString() + " " + returnValue.irName;
+        }
+    }
+}

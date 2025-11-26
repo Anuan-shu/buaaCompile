@@ -62,4 +62,13 @@ public class ForStmt extends Node {
         }
         return lVals;
     }
+    public ArrayList<Exp> getExps() {
+        ArrayList<Exp> exps = new ArrayList<>();
+        for (Node child : this.getChildren()) {
+            if (child.getType() == GrammarType.Exp) {
+                exps.add((Exp) child);
+            }
+        }
+        return exps;
+    }
 }

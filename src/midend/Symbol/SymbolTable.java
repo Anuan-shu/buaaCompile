@@ -64,4 +64,8 @@ public class SymbolTable {
     public Symbol getSymbolByIdent(String ident){
         return this.symbolTable.get(ident);
     }
+
+    public boolean containsSymbol(Symbol constSymbol) {
+        return this.symbolTable.containsValue(constSymbol);
+    }
 }
