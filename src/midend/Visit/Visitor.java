@@ -27,9 +27,14 @@ public class Visitor {
 
     public void Visit() {
         //添加库函数定义
-        OutSymbolTable.addSymbol(new Symbol("getint", SymbolType.VOID_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "@getint")));
-        OutSymbolTable.addSymbol(new Symbol("main", SymbolType.INT_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "main")));
-        OutSymbolTable.addSymbol(new Symbol("printf", SymbolType.VOID_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.VOID, "printf")));
+        OutSymbolTable.addSymbol(new Symbol("getint", SymbolType.VOID_FUNC,
+                0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "@getint")));
+
+        OutSymbolTable.addSymbol(new Symbol("main", SymbolType.INT_FUNC,
+                0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "main")));
+
+        OutSymbolTable.addSymbol(new Symbol("printf", SymbolType.VOID_FUNC,
+                0, new IrFunction(ValueType.FUNCTION, IrType.VOID, "printf")));
 
         // 遍历所有声明
         for (Decl decl : comUnit.GetDecls()) {

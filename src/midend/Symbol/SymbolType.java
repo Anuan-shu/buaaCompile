@@ -8,8 +8,12 @@ public enum SymbolType {
     INT_ARRAY("IntArray"),
     STATIC_INT_ARRAY("StaticIntArray"),
     VOID_FUNC("VoidFunc"),
-    INT_FUNC("IntFunc"), ARRAY("Array"), NOT_ARRAY("NotArray"), NOT_EXIST("NotExist");
+    INT_FUNC("IntFunc"),
+    ARRAY("Array"),
+    NOT_ARRAY("NotArray"),
+    NOT_EXIST("NotExist");
     private final String typeName;
+
     SymbolType(String typeName) {
         this.typeName = typeName;
     }

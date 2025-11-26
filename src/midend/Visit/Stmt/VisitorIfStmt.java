@@ -2,10 +2,10 @@ package midend.Visit.Stmt;
 
 import frontend.Parser.Stmt.Cond;
 import frontend.Parser.Stmt.Stmt;
+import midend.LLVM.Instruction.BranchInstr;
 import midend.LLVM.Instruction.Instruction;
 import midend.LLVM.Instruction.JumpInstr;
 import midend.LLVM.Instruction.ReturnInstr;
-import midend.LLVM.Instruction.BranchInstr;
 import midend.LLVM.IrBuilder;
 import midend.LLVM.value.IrBasicBlock;
 import midend.Visit.Exp.VisitorCond;
@@ -17,14 +17,13 @@ public class VisitorIfStmt {
 
         // if为真的基本块
         IrBasicBlock ifBlock = IrBuilder.GetNewBasicBlockIr();
-        // 统一创建 afterBlock
+        // if 语句之后的基本块
         IrBasicBlock afterIfBlock = IrBuilder.GetNewBasicBlockIr();
 
         if (!stmt.HasElseStmt()) {
             // --- 没有 else 的情况 ---
 
             // 1. 处理条件 (Cond 会生成 br true, false)
-            // False 跳转到 afterIfBlock
             VisitorCond.LLVMVisitCond(cond, ifBlock, afterIfBlock);
 
             // 2. 处理 if 语句块
@@ -63,17 +62,23 @@ public class VisitorIfStmt {
         }
     }
 
-    // 辅助方法：检查当前块是否已经由 return/break/continue 结束
+    /**
+     * 检查当前基本块是否已有终结指令，若没有则添加跳转到目标块的跳转指令
+     *
+     * @param targetBlock
+     */
     private static void checkAndJump(IrBasicBlock targetBlock) {
         // 获取当前基本块
         IrBasicBlock currentBlock = IrBuilder.getCurrentBasicBlock();
-        // 获取当前块的最后一条指令（你需要根据你的架构实现 getLastInstruction）
+        // 获取当前块的最后一条指令
         Instruction lastInstr = currentBlock.getLastInstruction();
         boolean hasTerminator;
         if (lastInstr == null) {
             hasTerminator = false;
         } else {
-            hasTerminator = lastInstr instanceof ReturnInstr || lastInstr instanceof JumpInstr || lastInstr instanceof BranchInstr;
+            hasTerminator = lastInstr instanceof ReturnInstr
+                    || lastInstr instanceof JumpInstr
+                    || lastInstr instanceof BranchInstr;
         }
 
         if (!hasTerminator) {

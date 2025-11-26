@@ -12,7 +12,6 @@ import midend.LLVM.Type.IrType;
 import midend.LLVM.ValueType;
 import midend.LLVM.value.IrFunction;
 import midend.LLVM.value.IrParameter;
-import midend.LLVM.value.IrValue;
 import midend.Symbol.GlobalSymbolTable;
 import midend.Symbol.Symbol;
 import midend.Symbol.SymbolTable;
@@ -28,7 +27,8 @@ public class VisitorFuncDef {
         boolean inLastOutOfFunc = true;
 
         //作用域加一
-        SymbolTable newFuncSymbolTable = new SymbolTable(GlobalSymbolTable.addScopeDepth(), GlobalSymbolTable.getLocalSymbolTable());
+        SymbolTable newFuncSymbolTable = new SymbolTable(GlobalSymbolTable.addScopeDepth(),
+                GlobalSymbolTable.getLocalSymbolTable());
         GlobalSymbolTable.getLocalSymbolTable().AddSonTable(newFuncSymbolTable);
         GlobalSymbolTable.setLocalSymbolTable(newFuncSymbolTable);
 
@@ -72,7 +72,8 @@ public class VisitorFuncDef {
         if (funcDef.HasFuncFParams()) {
             for (int i = 0; i < funcParamList.size(); i++) {
                 Symbol paramSymbol = funcParamList.get(i);
-                IrParameter irParameter = new IrParameter(ValueType.PARAMETER, GetParamIrType(paramSymbol), IrBuilder.GetLocalVarName());
+                IrParameter irParameter = new IrParameter(ValueType.PARAMETER, GetParamIrType(paramSymbol),
+                        IrBuilder.GetLocalVarName());
 
                 function.addParameter(irParameter);
 

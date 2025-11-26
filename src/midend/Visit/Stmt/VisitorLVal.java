@@ -3,11 +3,8 @@ package midend.Visit.Stmt;
 import frontend.Error;
 import frontend.Parser.Exp.Exp;
 import frontend.Parser.Stmt.LVal;
-import frontend.Parser.Token.ConstToken;
 import midend.LLVM.Const.IrConstInt;
-import midend.LLVM.Instruction.AllocateInstruction;
 import midend.LLVM.Instruction.GepInstr;
-import midend.LLVM.Instruction.LoadInstr;
 import midend.LLVM.IrBuilder;
 import midend.LLVM.Type.IrPointer;
 import midend.LLVM.value.IrValue;
@@ -28,7 +25,9 @@ public class VisitorLVal {
         Symbol symbol = GlobalSymbolTable.searchSymbolByIdent(ident);
         //LVal 为常量时，不能对其修改。
         if (symbol != null) {
-            if (isLeftSide && (symbol.GetSymbolType().equals(SymbolType.CONST_INT) || symbol.GetSymbolType().equals(SymbolType.CONST_INT_ARRAY))) {
+            if (isLeftSide && (symbol.GetSymbolType().equals(SymbolType.CONST_INT)
+                    || symbol.GetSymbolType().equals(SymbolType.CONST_INT_ARRAY))) {
+
                 Error error = new Error(Error.ErrorType.h, lVal.GetLineNumber(), "h");
                 error.printToError(error);
             }
