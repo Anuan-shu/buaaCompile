@@ -93,7 +93,7 @@ public class GlobalSymbolTable {
         localSymbolTable.AddSymbol(symbol);
     }
 
-    public static Symbol searchSymbolByIdent(String ident) {
+    public static Symbol searchSymbolByIdent(String ident, int useLine) {
         if (ident != null) {
             SymbolTable currentSymbolTable = localSymbolTable;
             while (currentSymbolTable != null) {
@@ -101,6 +101,10 @@ public class GlobalSymbolTable {
                 if (currentSymbol == null) {
                     currentSymbolTable = currentSymbolTable.getFatherTable();
                 } else {
+                    if (currentSymbol.GetLineNumber() > useLine) {
+                        currentSymbolTable = currentSymbolTable.getFatherTable();
+                        continue;
+                    }
                     return currentSymbol;
                 }
             }

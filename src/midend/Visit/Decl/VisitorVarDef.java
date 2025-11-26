@@ -20,52 +20,52 @@ import java.util.ArrayList;
 public class VisitorVarDef {
     public static void VisitVarDef(VarDef vardef) {
         //VarDef → Ident [ '[' ConstExp ']' ] | Ident [ '[' ConstExp ']' ] '=' InitVal // b
-        if(vardef==null){
+        if (vardef == null) {
             return;
         }
-        if(vardef.hasInitVal()) {
+        if (vardef.hasInitVal()) {
             //访问初始化值
             VisitorInitVal.VisitInitVal(vardef.GetInitVal());
         }
     }
 
-    public static void LLVMVisitVarDef(VarDef vardef,boolean isStatic) {
-        Symbol varSymbol = GlobalSymbolTable.searchSymbolByIdent(vardef.GetIdent());
-        if(isStatic){
-            if(GlobalSymbolTable.isGlobalSymbol(varSymbol)) {
+    public static void LLVMVisitVarDef(VarDef vardef, boolean isStatic) {
+        Symbol varSymbol = GlobalSymbolTable.searchSymbolByIdent(vardef.GetIdent(), vardef.GetLineNumber());
+        if (isStatic) {
+            if (GlobalSymbolTable.isGlobalSymbol(varSymbol)) {
                 IrGlobalValue irGlobalValue = IrBuilder.GetNewIrStaticGlobalValue(varSymbol);
                 varSymbol.setIrValue(irGlobalValue);
-            }else{
+            } else {
                 IrConstant initValue = IrBuilder.GetIrConstantFromSymbol(varSymbol);
                 IrGlobalValue irGlobalValue = IrBuilder.GetNewIrStaticValue(initValue);
                 varSymbol.setIrValue(irGlobalValue);
             }
-        }else{
-            if(GlobalSymbolTable.isGlobalSymbol(varSymbol)) {
+        } else {
+            if (GlobalSymbolTable.isGlobalSymbol(varSymbol)) {
                 IrGlobalValue irGlobalValue = IrBuilder.GetNewIrGlobalValue(varSymbol);
                 varSymbol.setIrValue(irGlobalValue);
-            }else{
+            } else {
                 AllocateInstruction allocateInstruction = IrBuilder.GetNewAllocateInstruction(varSymbol);
-                if(!varSymbol.isArray()){
+                if (!varSymbol.isArray()) {
                     //非数组，有初始值
-                    if(vardef.hasInitVal()){
+                    if (vardef.hasInitVal()) {
                         Exp exp = vardef.GetInitVal().getExp();
                         IrValue irExp = VisitorExp.LLVMVisitExp(exp);
 
-                        StoreInstr storeInstr = IrBuilder.GetNewStoreInstrByValueAndAddress(irExp,allocateInstruction);
+                        StoreInstr storeInstr = IrBuilder.GetNewStoreInstrByValueAndAddress(irExp, allocateInstruction);
                     }
-                }else{
-                    if(!vardef.hasInitVal()){
+                } else {
+                    if (!vardef.hasInitVal()) {
                         varSymbol.setIrValue(allocateInstruction);
                         return;
                     }
                     ArrayList<Exp> exps = vardef.GetInitVal().getExpList();
-                    for(int i=0; i<exps.size(); i++){
+                    for (int i = 0; i < exps.size(); i++) {
                         Exp exp = exps.get(i);
                         IrValue irExp = VisitorExp.LLVMVisitExp(exp);
                         irExp = IrType.convertValueToType(irExp, IrType.INT32);
-                        GepInstr gepInstr = IrBuilder.GetNewGepInstr(allocateInstruction,new IrConstInt(i));
-                        StoreInstr storeInstr = IrBuilder.GetNewStoreInstrByValueAndAddress(irExp,gepInstr);
+                        GepInstr gepInstr = IrBuilder.GetNewGepInstr(allocateInstruction, new IrConstInt(i));
+                        StoreInstr storeInstr = IrBuilder.GetNewStoreInstrByValueAndAddress(irExp, gepInstr);
                     }
                 }
                 varSymbol.setIrValue(allocateInstruction);

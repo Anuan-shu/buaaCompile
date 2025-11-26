@@ -54,7 +54,7 @@ public class VisitorFuncDef {
 
     public static void LLVMVisitFuncDef(FuncDef funcDef) {
         String funcName = funcDef.GetIdent();
-        Symbol funcSymbol = GlobalSymbolTable.searchSymbolByIdent(funcName);
+        Symbol funcSymbol = GlobalSymbolTable.searchSymbolByIdent(funcName, funcDef.GetLineNumber());
         boolean isHasReturn = !funcDef.getFuncTypeIsVoid();
         IrFunction function;
         if (isHasReturn) {

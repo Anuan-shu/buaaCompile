@@ -5,10 +5,10 @@ import frontend.Parser.Exp.Exp;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
+import frontend.Token;
 import midend.Symbol.GlobalSymbolTable;
 import midend.Symbol.Symbol;
 import midend.Symbol.SymbolType;
-import frontend.Token;
 
 import java.util.ArrayList;
 
@@ -67,7 +67,7 @@ public class LVal extends Node {
         }
         //查符号表
         String ident = this.getIdent();
-        Symbol symbolExp = GlobalSymbolTable.searchSymbolByIdent(ident);
+        Symbol symbolExp = GlobalSymbolTable.searchSymbolByIdent(ident, this.GetLineNumber());
         if (symbolExp != null) {
             return symbolExp.GetSymbolType();
         } else {
@@ -89,7 +89,7 @@ public class LVal extends Node {
     public int Evaluate() {
         if (this.hasIndexExp()) {
             //数组元素访问，返回对应下标的值
-            Symbol symbolExp = GlobalSymbolTable.searchSymbolByIdent(this.getIdent());
+            Symbol symbolExp = GlobalSymbolTable.searchSymbolByIdent(this.getIdent(), this.GetLineNumber());
             if (symbolExp != null) {
                 int index = this.getIndexExp().Evaluate();
                 if (index < 0 || index >= symbolExp.getInitValues().size()) {
@@ -100,7 +100,7 @@ public class LVal extends Node {
             }
         } else {
             //变量访问，返回变量的值
-            Symbol symbolExp = GlobalSymbolTable.searchSymbolByIdent(this.getIdent());
+            Symbol symbolExp = GlobalSymbolTable.searchSymbolByIdent(this.getIdent(), this.GetLineNumber());
             if (symbolExp != null) {
                 if (symbolExp.getInitValues().isEmpty()) {
                     return 0;

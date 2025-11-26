@@ -22,7 +22,7 @@ public class VisitorLVal {
         }
         String ident = lVal.getIdent();
 
-        Symbol symbol = GlobalSymbolTable.searchSymbolByIdent(ident);
+        Symbol symbol = GlobalSymbolTable.searchSymbolByIdent(ident, lVal.GetLineNumber());
         //LVal 为常量时，不能对其修改。
         if (symbol != null) {
             if (isLeftSide && (symbol.GetSymbolType().equals(SymbolType.CONST_INT)
@@ -59,7 +59,11 @@ public class VisitorLVal {
         }
         String Ident = lVal.getIdent();
         Exp exp = lVal.getIndexExp();
-        Symbol symbol = GlobalSymbolTable.searchSymbolByIdent(Ident);
+        Symbol symbol = GlobalSymbolTable.searchSymbolByIdent(Ident, lVal.GetLineNumber());
+        if (symbol == null) {
+            System.out.println("LLVMVisitLVal: " + Ident);
+            return null;
+        }
         if (isLeftSide) {
             //左值
             if (!symbol.isArray()) {

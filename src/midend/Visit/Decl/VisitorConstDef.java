@@ -16,40 +16,38 @@ import java.util.ArrayList;
 public class VisitorConstDef {
     public static void VisitConstDef(ConstDef constDef) {
         //ConstDef → Ident [ '[' ConstExp ']' ] '=' ConstInitVal // b
-
     }
 
     public static void LLVMVisitConstDef(ConstDef constDef) {
-        Symbol constSymbol = GlobalSymbolTable.searchSymbolByIdent(constDef.GetIdent());
+        Symbol constSymbol = GlobalSymbolTable.searchSymbolByIdent(constDef.GetIdent(), constDef.GetLineNumber());
 
-        if(GlobalSymbolTable.isGlobalSymbol(constSymbol)){
+        if (GlobalSymbolTable.isGlobalSymbol(constSymbol)) {
             IrGlobalValue irGlobalValue = IrBuilder.GetNewIrGlobalValue(constSymbol);
             constSymbol.setIrValue(irGlobalValue);//关联全局常量符号与ir值
-        }
-        else{
+        } else {
             AllocateInstruction allocateInstruction = IrBuilder.GetNewAllocateInstruction(constSymbol);
             constSymbol.setIrValue(allocateInstruction);//关联局部常量符号与ir
 
-            ArrayList<Integer>initValues = constSymbol.getInitValues();
+            ArrayList<Integer> initValues = constSymbol.getInitValues();
             int size = constSymbol.getSize();
             //补全初始化
-            for(int i=initValues.size(); i<size; i++){
+            for (int i = initValues.size(); i < size; i++) {
                 initValues.add(0);
             }
-            if(!constSymbol.isArray()){
+            if (!constSymbol.isArray()) {
                 //非数组
                 //直接添加存储指令
-                StoreInstr storeInstr = IrBuilder.GetNewStoreInstrBySymbol(constSymbol,allocateInstruction);
-            }else{
+                StoreInstr storeInstr = IrBuilder.GetNewStoreInstrBySymbol(constSymbol, allocateInstruction);
+            } else {
                 // 数组
-                for(int i = 0; i < size; i++){
+                for (int i = 0; i < size; i++) {
                     //生成Gep指令计算偏移量
-                    GepInstr gepInstr = IrBuilder.GetNewGepInstr(allocateInstruction,new IrConstInt(i));
+                    GepInstr gepInstr = IrBuilder.GetNewGepInstr(allocateInstruction, new IrConstInt(i));
 
                     //获取初始值
                     IrValue initValue = new IrConstInt(initValues.get(i));
 
-                    StoreInstr storeInstr = IrBuilder.GetNewStoreInstrByValueAndAddress(initValue,gepInstr);
+                    StoreInstr storeInstr = IrBuilder.GetNewStoreInstrByValueAndAddress(initValue, gepInstr);
                 }
             }
 
