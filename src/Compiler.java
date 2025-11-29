@@ -34,7 +34,7 @@ public class Compiler {
             visitor.llvmVisit();
             visitor.writeLLVMToFile("llvm_ir.txt");
             Backend backend = new Backend();
-            backend.generateMips();
+            backend.generateMips(true);
             backend.writeMipsToFile("mips.txt");
         } catch (Exception e) {
             e.printStackTrace();

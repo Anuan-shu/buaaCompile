@@ -16,6 +16,7 @@ public class EmitInstruction {
     // 当前函数的名字（用于拼接跳转标签）
     private final String currentFuncLabel;
     private final HashMap<AllocateInstruction, Integer> allocaArrayOffsets;
+    private boolean optimize = false;
 
     public EmitInstruction(MipsModule mips, HashMap<IrValue, Integer> offsetMap, HashMap<AllocateInstruction, Integer> allocaArrayOffsets, String currentFuncLabel) {
         this.mips = mips;
@@ -25,7 +26,8 @@ public class EmitInstruction {
     }
 
     // --- 入口方法 ---
-    public void emit(Instruction instr) {
+    public void emit(Instruction instr, boolean optimize) {
+        this.optimize = optimize;
         if (instr instanceof AluInst) {
             emitBinary((AluInst) instr);
         } else if (instr instanceof LoadInstr) {
@@ -131,38 +133,198 @@ public class EmitInstruction {
         }
     }
 
+    // 辅助函数：判断是否为2的幂
+    private int getLog2(int val) {
+        if (val > 0 && (val & (val - 1)) == 0) {
+            return Integer.numberOfTrailingZeros(val);
+        }
+        return -1;
+    }
+
+    // 尝试优化乘法 (x * const)
+    // 返回 true 表示已优化并生成了指令，false 表示放弃优化
+    private boolean tryOptimizeMul(IrValue src, int constVal, String dstReg) {
+        // 0, 1, 2的幂次 已经在之前处理了，这里处理其他常见常数
+        // 使用 $at 作为临时寄存器
+
+        //loadToReg(src, "$t0"); // 源在 $t0
+
+        switch (constVal) {
+            case 3: // x * 3 = (x << 1) + x
+                mips.addInst("sll $at, $t0, 1");
+                mips.addInst("addu " + dstReg + ", $at, $t0");
+                return true;
+            case 5: // x * 5 = (x << 2) + x
+                mips.addInst("sll $at, $t0, 2");
+                mips.addInst("addu " + dstReg + ", $at, $t0");
+                return true;
+            case 6: // x * 6 = (x * 3) << 1
+                mips.addInst("sll $at, $t0, 1");
+                mips.addInst("addu $at, $at, $t0");
+                mips.addInst("sll " + dstReg + ", $at, 1");
+                return true;
+            case 7: // x * 7 = (x << 3) - x
+                mips.addInst("sll $at, $t0, 3");
+                mips.addInst("subu " + dstReg + ", $at, $t0");
+                return true;
+            case 9: // x * 9 = (x << 3) + x
+                mips.addInst("sll $at, $t0, 3");
+                mips.addInst("addu " + dstReg + ", $at, $t0");
+                return true;
+            case 10: // x * 10 = (x << 3) + (x << 1)
+                mips.addInst("sll $at, $t0, 3");
+                mips.addInst("sll " + dstReg + ", $t0, 1");
+                mips.addInst("addu " + dstReg + ", $at, " + dstReg);
+                return true;
+            // 可以继续添加 11, 12, ... 只要指令数 < 5 即可
+            default:
+                return false;
+        }
+    }
+
+    // 尝试优化除法 (x / const)
+    // 使用乘法逆元法： div -> mult (high) + shift + sign_fix
+    private boolean tryOptimizeDiv(IrValue src, int d, String dstReg) {
+        // 只处理常用的小正整数除数，避免魔数计算太复杂
+        long magic;
+        int shift;
+
+        // 查表 (Hacker's Delight)
+        switch (d) {
+            case 3:
+                magic = 0x55555556L;
+                shift = 0;
+                break;
+            case 5:
+                magic = 0x66666667L;
+                shift = 1;
+                break;
+            case 6:
+                magic = 0x2AAAAAABL;
+                shift = 0;
+                break;
+            case 10:
+                magic = 0x66666667L;
+                shift = 2;
+                break;
+            case 100:
+                magic = 0x51EB851FL;
+                shift = 5;
+                break;
+            default:
+                return false; // 其他数暂不优化
+        }
+
+        //loadToReg(src, "$t0"); // 被除数
+
+        // 1. 加载魔数
+        // 魔数通常很大，可能超过16位，la/li 伪指令会自动拆分
+        // 按十六进制字符串加载
+        mips.addInst(String.format("li $at, 0x%X", magic));
+
+        // 2. 有符号乘法 (High part -> hi)
+        mips.addInst("mult $t0, $at");
+        mips.addInst("mfhi $at"); // 取高32位
+
+        // 3. 算术右移
+        if (shift > 0) {
+            mips.addInst(String.format("sra $at, $at, %d", shift));
+        }
+
+        // 4. 符号位修正 (t0 < 0 ? result++ : result)
+        // 获取符号位 (x >>> 31)
+        mips.addInst("srl $t1, $t0, 31");
+
+        // 结果加上符号位
+        mips.addInst("addu " + dstReg + ", $at, $t1");
+
+        return true;
+    }
 
     // 1. 二元运算 (Add, Sub, Mul, Div, Rem...)
     private void emitBinary(AluInst instr) {
         loadToReg(instr.getLeft(), "$t0");
         loadToReg(instr.getRight(), "$t1");
 
-        switch (instr.getOp()) {
-            case "ADD":
-                mips.addInst("addu $t2, $t0, $t1");
-                break;
-            case "SUB":
-                mips.addInst("subu $t2, $t0, $t1");
-                break;
-            case "MUL":
-                mips.addInst("mul $t2, $t0, $t1");
-                break;
-            case "SDIV": // 有符号除法
-                mips.addInst("div $t0, $t1");
-                mips.addInst("mflo $t2"); // 取商
-                break;
-            case "SREM": // 取模 (remainder)
-                mips.addInst("div $t0, $t1");
-                mips.addInst("mfhi $t2"); // 取余
-                break;
-            case "AND":
-                mips.addInst("and $t2, $t0, $t1");
-                break;
-            case "OR":
-                mips.addInst("or $t2, $t0, $t1");
-                break;
-            default:
-                throw new RuntimeException("Unknown Binary Op: " + instr.getOp());
+        boolean optimized = false;
+        // 检查右操作数是否为常数
+        if (instr.getRight() instanceof IrConstInt) {
+            int val = ((IrConstInt) instr.getRight()).getValue();
+            int log2 = getLog2(val);
+
+            // 优化乘法和除法的 2 的幂次
+            if (log2 >= 0) {
+                if (instr.getOp().equals("MUL")) {
+                    // x * 2^k  ==>  x << k
+                    mips.addInst(String.format("sll $t2, $t0, %d", log2));
+                    optimized = true;
+                } else if (instr.getOp().equals("SDIV")) {
+                    // 优化：x / 2^k
+                    // 必须处理负数向零取整的问题
+                    // 逻辑：if (x < 0) x = x + (2^k - 1); result = x >> k;
+
+                    if (log2 > 0) {
+                        // 1. 取出符号位到 $t3 (如果 x<0，$t3=-1; 否则 $t3=0)
+                        mips.addInst("sra $t3, $t0, 31");
+
+                        // 2. 生成偏置 (2^k - 1)
+                        // 利用符号位移位: 如果 $t3 是全1，逻辑右移 (32-k) 位后，低 k 位为 1
+                        mips.addInst(String.format("srl $t3, $t3, %d", 32 - log2));
+
+                        // 3. 加上偏置: $t3 = x + bias
+                        mips.addInst("addu $t3, $t0, $t3");
+
+                        // 4. 算术右移
+                        mips.addInst(String.format("sra $t2, $t3, %d", log2));
+
+                    } else {
+                        // 如果 log2 == 0 (即除以 1)，直接移动
+                        mips.addInst("move $t2, $t0");
+                    }
+                    optimized = true;
+                }
+            }
+
+            // 进一步尝试其他常数优化
+            if (!optimized) {
+                if (instr.getOp().equals("MUL")) {
+                    optimized = tryOptimizeMul(instr.getLeft(), val, "$t2");
+                } else if (instr.getOp().equals("SDIV")) {
+                    // 这里只优化除数 > 0 的情况
+                    if (val > 0) {
+                        optimized = tryOptimizeDiv(instr.getLeft(), val, "$t2");
+                    }
+                }
+            }
+        }
+        if (!optimized) {
+            switch (instr.getOp()) {
+                case "ADD":
+                    mips.addInst("addu $t2, $t0, $t1");
+                    break;
+                case "SUB":
+                    mips.addInst("subu $t2, $t0, $t1");
+                    break;
+                case "MUL":
+                    mips.addInst("mul $t2, $t0, $t1");
+                    break;
+                case "SDIV": // 有符号除法
+                    mips.addInst("div $t0, $t1");
+                    mips.addInst("mflo $t2"); // 取商
+                    break;
+                case "SREM": // 取模 (remainder)
+                    mips.addInst("div $t0, $t1");
+                    mips.addInst("mfhi $t2"); // 取余
+                    break;
+                case "AND":
+                    mips.addInst("and $t2, $t0, $t1");
+                    break;
+                case "OR":
+                    mips.addInst("or $t2, $t0, $t1");
+                    break;
+                default:
+                    throw new RuntimeException("Unknown Binary Op: " + instr.getOp());
+            }
         }
         saveReg(instr, "$t2");
     }
@@ -296,7 +458,7 @@ public class EmitInstruction {
         if (stackArgs > 0) {
             mips.addInst("addiu $sp, $sp, " + (stackArgs * 4));
         }
-        
+
         // 6.3 处理返回值
         // 如果 call 指令有返回值 (不是 void)，则结果在 $v0
         if (!instr.irType.isVoid()) {

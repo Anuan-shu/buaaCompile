@@ -22,7 +22,12 @@ public class MipsModule {
         sb.append(".data\n");
         for (String s : dataSection) sb.append(s).append("\n");
         sb.append("\n.text\n");
-        for (String s : textSection) sb.append(s).append("\n");
+        if (Backend.getOptimize()) {
+            List<String> optimizedText = MipsOptimizer.optimize(this.textSection);
+            for (String s : optimizedText) sb.append(s).append("\n");
+        } else {
+            for (String s : textSection) sb.append(s).append("\n");
+        }
         return sb.toString();
     }
 }

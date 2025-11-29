@@ -30,7 +30,7 @@ public class MipsBuilder {
         return mips;
     }
 
-    public static MipsModule generate(IrModule irModule) {
+    public static MipsModule generate(IrModule irModule, boolean optimize) {
 
         // 1. 处理字符串常量
         for (IrConstString irConstString : irModule.getStringIrConstStringHashMap().values()) {
@@ -47,7 +47,7 @@ public class MipsBuilder {
 
         // 3. 处理函数
         for (IrFunction function : irModule.getFunctions()) {
-            emitFunction(function);
+            emitFunction(function, optimize);
         }
 
         // 4. 库函数
@@ -65,7 +65,7 @@ public class MipsBuilder {
         mips.addInst("nop");
     }
 
-    private static void emitFunction(IrFunction function) {
+    private static void emitFunction(IrFunction function, boolean optimize) {
         // 0. 初始化状态
         offsetMap.clear();
         currentFunctionStackSize = 0; // 重置栈计数
@@ -172,7 +172,7 @@ public class MipsBuilder {
 
             for (Instruction instr : bb.getInstructions()) {
                 // 调用指令翻译器
-                emitter.emit(instr);
+                emitter.emit(instr, optimize);
             }
         }
     }
