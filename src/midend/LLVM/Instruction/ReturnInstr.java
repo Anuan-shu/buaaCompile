@@ -20,4 +20,12 @@ public class ReturnInstr extends Instruction {
             return "ret " + returnValue.irType.toString() + " " + returnValue.irName;
         }
     }
+
+    public boolean isReturnVoid() {
+        return returnValue == null;
+    }
+
+    public IrValue getReturnValue() {
+        return returnValue;
+    }
 }

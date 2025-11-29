@@ -21,4 +21,8 @@ public class LoadInstr extends Instruction {
         IrValue pointer = this.getUseValues().get(0);
         return this.irName + " = load " + this.irType + ", " + pointer.irType + " " + pointer.irName;
     }
+
+    public IrValue getPtr() {
+        return this.getUseValues().get(0);
+    }
 }

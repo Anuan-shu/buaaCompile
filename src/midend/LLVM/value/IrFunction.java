@@ -15,6 +15,14 @@ public class IrFunction extends IrValue {
         basicBlocks = new ArrayList<>();
     }
 
+    public ArrayList<IrParameter> getParameters() {
+        return parameters;
+    }
+
+    public ArrayList<IrBasicBlock> getBasicBlocks() {
+        return basicBlocks;
+    }
+
     public void addBasicBlock(IrBasicBlock basicBlock) {
         basicBlocks.add(basicBlock);
     }

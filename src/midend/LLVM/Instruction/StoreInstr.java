@@ -17,4 +17,12 @@ public class StoreInstr extends Instruction {
         IrValue address = this.getUseValues().get(1);
         return "store " + value.irType.toString() + " " + value.irName + ", " + address.irType.toString() + " " + address.irName;
     }
+
+    public IrValue getVal() {
+        return this.getUseValues().get(0);
+    }
+
+    public IrValue getPtr() {
+        return this.getUseValues().get(1);
+    }
 }

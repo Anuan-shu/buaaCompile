@@ -49,4 +49,12 @@ public class GepInstr extends Instruction {
             return this.irName + " = getelementptr inbounds " + ptrType + ", " + pointerType + " " + pointer.irName + ", " + offset.irType + " " + offset.irName;
         }
     }
+
+    public IrValue getPtr() {
+        return this.getUseValues().get(0);
+    }
+
+    public IrValue getIndice() {
+        return this.getUseValues().get(1);
+    }
 }

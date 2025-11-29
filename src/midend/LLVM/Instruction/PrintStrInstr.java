@@ -5,6 +5,7 @@ import midend.LLVM.IrBuilder;
 import midend.LLVM.Type.IrPointer;
 import midend.LLVM.Type.IrType;
 import midend.LLVM.ValueType;
+import midend.LLVM.value.IrValue;
 
 public class PrintStrInstr extends Instruction {
     private IrConstString formatString;
@@ -18,5 +19,9 @@ public class PrintStrInstr extends Instruction {
     public String toString() {
         IrPointer pointerType = (IrPointer) this.formatString.irType;
         return "call void @putstr(i8* getelementptr inbounds (" + pointerType.targetType + ", " + pointerType + " " + this.formatString.irName + ", i64 0, i64 0))";
+    }
+
+    public IrValue getPrintValue() {
+        return this.formatString;
     }
 }

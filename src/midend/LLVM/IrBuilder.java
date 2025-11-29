@@ -42,6 +42,15 @@ public class IrBuilder {
     }
 
     //传入函数名，ValueType.FUNCTION，IrType.INT32/VOID
+
+    /**
+     * 创建新的IrFunction，并设置为当前函数
+     *
+     * @param main      函数名
+     * @param valueType
+     * @param irType    函数返回类型
+     * @return
+     */
     public static IrFunction GetNewIrFunction(String main, ValueType valueType, IrType irType) {
         main = GetFuncName(main);
         // 创建函数
@@ -49,7 +58,7 @@ public class IrBuilder {
         irModule.addFunction(irFunction);
         currentFunction = irFunction;
 
-        // 创建第一个基本块
+        // 创建基本块
         IrBasicBlock irBasicBlock = GetNewBasicBlockIr();
         currentBasicBlock = irBasicBlock;
 

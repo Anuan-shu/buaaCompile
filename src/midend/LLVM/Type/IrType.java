@@ -1,6 +1,5 @@
 package midend.LLVM.Type;
 
-import midend.LLVM.Instruction.ZextInstr;
 import midend.LLVM.IrBuilder;
 import midend.LLVM.value.IrValue;
 
@@ -70,5 +69,21 @@ public class IrType {
 
     public boolean isPointerType() {
         return this.typeName.equals("pointer");
+    }
+
+    public boolean isVoid() {
+        return this.typeName.equals("void");
+    }
+
+    public boolean isIntegerType() {
+        return this.typeName.equals("i32");
+    }
+
+    public boolean isInt1() {
+        return this.typeName.equals("i1");
+    }
+
+    public boolean isInt8() {
+        return this.typeName.equals("i8");
     }
 }

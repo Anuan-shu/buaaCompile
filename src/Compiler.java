@@ -1,3 +1,4 @@
+import backend.Backend;
 import frontend.Error;
 import frontend.GlobalError;
 import frontend.Lexer;
@@ -32,6 +33,9 @@ public class Compiler {
 //            writeAllErrorsToFile(errorfile);
             visitor.llvmVisit();
             visitor.writeLLVMToFile("llvm_ir.txt");
+            Backend backend = new Backend();
+            backend.generateMips();
+            backend.writeMipsToFile("mips.txt");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -44,7 +48,7 @@ public class Compiler {
             //按行号从小到大输出
             allErrors.sort(Comparator.comparingInt(Error::getLine));
             for (Error error : allErrors) {
-                if(GlobalError.isPrinted(error.getLine())){
+                if (GlobalError.isPrinted(error.getLine())) {
                     continue;
                 }
                 writer.write(error + "\n");
@@ -69,11 +73,11 @@ public class Compiler {
         }
     }
 
-    public static void writeTokensToFile(String lexerfile,Lexer lexer){
+    public static void writeTokensToFile(String lexerfile, Lexer lexer) {
         try {
             FileWriter writer = new FileWriter(lexerfile);
             for (frontend.Token token : lexer.getTokens()) {
-                writer.write(token.getType()+" "+ token.getLexeme() + "\n");
+                writer.write(token.getType() + " " + token.getLexeme() + "\n");
             }
             writer.close();
         } catch (Exception e) {
@@ -81,37 +85,36 @@ public class Compiler {
         }
     }
 
-    public static void writeSymbolTableToFile(String symbolFile){
+    public static void writeSymbolTableToFile(String symbolFile) {
         try {
             FileWriter writer = new FileWriter(symbolFile);
             SymbolTable currentTable = GlobalSymbolTable.getGlobalSymbolTable();
             while (currentTable != null) {
-                if(currentTable.getIsWrite()){
-                    if(currentTable.hasNextSonTable()){
+                if (currentTable.getIsWrite()) {
+                    if (currentTable.hasNextSonTable()) {
                         currentTable = currentTable.GetNextSonTable();
-                    }else{
+                    } else {
                         currentTable = currentTable.getFatherTable();
                     }
-                }else{
+                } else {
                     int dep = currentTable.GetDepth();
-                    if(dep==0){
+                    if (dep == 0) {
                         break;
                     }
                     for (Symbol symbol : currentTable.GetSymbolList()) {
-                        writer.write(dep+" "+symbol.GetSymbolName()+" "+symbol.GetSymbolType().getTypeName()+"\n");
+                        writer.write(dep + " " + symbol.GetSymbolName() + " " + symbol.GetSymbolType().getTypeName() + "\n");
                         //System.out.println(dep+" "+symbol.GetSymbolName()+" "+ symbol.GetSymbolType().getTypeName());
                     }
                     currentTable.setWrite(true);
-                    if(currentTable.hasNextSonTable()){
+                    if (currentTable.hasNextSonTable()) {
                         currentTable = currentTable.GetNextSonTable();
-                    }else{
+                    } else {
                         currentTable = currentTable.getFatherTable();
                     }
                 }
             }
             writer.close();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }

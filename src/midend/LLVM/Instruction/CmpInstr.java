@@ -39,4 +39,31 @@ public class CmpInstr extends Instruction {
         IrValue rightValue = this.getUseValues().get(1);
         return this.irName + " = icmp " + transOp(op) + " i32 " + leftValue.irName + ", " + rightValue.irName;
     }
+
+    public IrValue getLeft() {
+        return this.getUseValues().get(0);
+    }
+
+    public IrValue getRight() {
+        return this.getUseValues().get(1);
+    }
+
+    public String getOp() {
+        switch (op) {
+            case "<":
+                return "LT";
+            case "<=":
+                return "LE";
+            case ">":
+                return "GT";
+            case ">=":
+                return "GE";
+            case "==":
+                return "EQ";
+            case "!=":
+                return "NE";
+            default:
+                return "unknown_op";
+        }
+    }
 }

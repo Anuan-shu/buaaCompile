@@ -67,6 +67,10 @@ public class VisitorVarDef {
                         GepInstr gepInstr = IrBuilder.GetNewGepInstr(allocateInstruction, new IrConstInt(i));
                         StoreInstr storeInstr = IrBuilder.GetNewStoreInstrByValueAndAddress(irExp, gepInstr);
                     }
+                    for (int i = exps.size(); i < varSymbol.getSize(); i++) {
+                        GepInstr gepInstr = IrBuilder.GetNewGepInstr(allocateInstruction, new IrConstInt(i));
+                        StoreInstr storeInstr = IrBuilder.GetNewStoreInstrByValueAndAddress(new IrConstInt(0), gepInstr);
+                    }
                 }
                 varSymbol.setIrValue(allocateInstruction);
             }
