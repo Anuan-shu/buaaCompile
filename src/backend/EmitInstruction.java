@@ -8,6 +8,7 @@ import midend.LLVM.value.IrValue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.UUID;
 
 public class EmitInstruction {
     private final MipsModule mips;
@@ -16,10 +17,7 @@ public class EmitInstruction {
     private final String currentFuncLabel;
     private final HashMap<AllocateInstruction, Integer> allocaArrayOffsets;
 
-    public EmitInstruction(MipsModule mips,
-                           HashMap<IrValue, Integer> offsetMap,
-                           HashMap<AllocateInstruction, Integer> allocaArrayOffsets,
-                           String currentFuncLabel) {
+    public EmitInstruction(MipsModule mips, HashMap<IrValue, Integer> offsetMap, HashMap<AllocateInstruction, Integer> allocaArrayOffsets, String currentFuncLabel) {
         this.mips = mips;
         this.offsetMap = offsetMap;
         this.allocaArrayOffsets = allocaArrayOffsets;
@@ -239,8 +237,15 @@ public class EmitInstruction {
         String falseLabel = currentFuncLabel + "_" + instr.getFalseBlock().irName;
 
         // 如果 cond != 0 (true)，跳转 trueLabel
-        mips.addInst("bnez $t0, " + trueLabel);
-        mips.addInst("nop"); // 延迟槽
+
+        String skipLabel = "skip_" + UUID.randomUUID().toString().replace("-", "");
+        // 如果 $t0 == 0 (即不满足条件)，跳过 j 指令
+        mips.addInst("beqz $t0, " + skipLabel);
+        mips.addInst("nop");
+        // 只有满足条件才执行这个长跳转
+        mips.addInst("j " + trueLabel);
+        mips.addInst("nop");
+        mips.addInst(skipLabel + ":");
 
         // 否则跳转 falseLabel
         mips.addInst("j " + falseLabel);
@@ -259,6 +264,14 @@ public class EmitInstruction {
     private void emitCall(CallInstr instr) {
         // 6.1 准备参数
         ArrayList<IrValue> args = instr.getParameters();
+
+        int stackArgs = Math.max(0, args.size() - 4);
+
+        // 1. 如果有栈参数，先腾出空间！防止覆盖局部变量
+        if (stackArgs > 0) {
+            mips.addInst("addiu $sp, $sp, -" + (stackArgs * 4));
+        }
+
         for (int i = 0; i < args.size(); i++) {
             IrValue arg = args.get(i);
             if (i < 4) {
@@ -279,6 +292,11 @@ public class EmitInstruction {
         mips.addInst("jal " + funcName);
         mips.addInst("nop");
 
+        // 调用完恢复栈指针
+        if (stackArgs > 0) {
+            mips.addInst("addiu $sp, $sp, " + (stackArgs * 4));
+        }
+        
         // 6.3 处理返回值
         // 如果 call 指令有返回值 (不是 void)，则结果在 $v0
         if (!instr.irType.isVoid()) {
@@ -315,8 +333,14 @@ public class EmitInstruction {
         if (entityOffset == null) return;
 
         // 2. 计算绝对地址 -> $t0
-        mips.addInst("addiu $t0, $fp, " + entityOffset);
-
+        //mips.addInst("addiu $t0, $fp, " + entityOffset);
+        if (entityOffset >= -32768 && entityOffset <= 32767) {
+            mips.addInst("addiu $t0, $fp, " + entityOffset);
+        } else {
+            // 偏移量太大，必须用寄存器中转
+            mips.addInst("li $at, " + entityOffset);
+            mips.addInst("addu $t0, $fp, $at");
+        }
         // 3. 将地址存入指针变量的位置 (instr 在 offsetMap 中的位置)
         // 复用 saveReg ，把 $t0 存入 instr 对应的栈槽
         saveReg(instr, "$t0");

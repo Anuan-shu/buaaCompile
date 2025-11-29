@@ -118,7 +118,15 @@ public class MipsBuilder {
 
         // 2.3 更新 $fp 和 $sp
         mips.addInst("move $fp, $sp");
-        mips.addInst("addiu $sp, $sp, -" + currentFunctionStackSize);
+        //mips.addInst("addiu $sp, $sp, -" + currentFunctionStackSize);
+        if (currentFunctionStackSize > 32767) {
+            // 如果栈太大，不能用立即数，需要用寄存器中转
+            mips.addInst("li $t0, -" + currentFunctionStackSize);
+            mips.addInst("addu $sp, $sp, $t0");
+        } else {
+            // 栈较小，直接用 addiu
+            mips.addInst("addiu $sp, $sp, -" + currentFunctionStackSize);
+        }
 
         // Step 3: 保存参数
         // MIPS 约定前 4 个参数在 $a0-$a3，我们需要把它们存入刚才分配的栈位置中
@@ -130,7 +138,14 @@ public class MipsBuilder {
 
             if (i < 4) {
                 // 前4个参数从寄存器存入栈
-                mips.addInst("sw $a" + i + ", " + offset + "($fp)");
+                //mips.addInst("sw $a" + i + ", " + offset + "($fp)");
+                if (offset >= -32768 && offset <= 32767) {
+                    mips.addInst("sw $a" + i + ", " + offset + "($fp)");
+                } else {
+                    mips.addInst("li $at, " + offset);
+                    mips.addInst("addu $at, $fp, $at");
+                    mips.addInst("sw $a" + i + ", 0($at)");
+                }
             } else {
                 // 1. 计算该参数在 Caller 栈帧中的位置
                 // 第5个参数在 0($sp)，即 0($fp)
@@ -198,32 +213,44 @@ public class MipsBuilder {
             }
 
             // B. 有具体数值，生成 .word
-            StringBuilder sb = new StringBuilder();
-            sb.append(label).append(": .word ");
+            mips.addGlobal(label + ":"); // 先单独输出标签
 
-            // 1. 先输出已有的元素
+            StringBuilder sb = new StringBuilder();
+            int count = 0; // 计数器
+
+            // 1. 输出已有元素
             for (int i = 0; i < elements.size(); i++) {
-                //  array 里存的是 IrConstant，强转为 IrConstInt 取值
+                if (count == 0) sb.append(".word "); // 每行开头加 .word
+
                 IrConstInt constInt = (IrConstInt) elements.get(i);
                 sb.append(constInt.getValue());
+                count++;
 
-                // 如果后面还有元素，或者需要补零，就加逗号
-                if (i < elements.size() - 1 || elements.size() < totalSize) {
+                // 每 50 个元素，或者到了最后一个元素，就换行输出
+                if (count == 50 || (i == elements.size() - 1 && elements.size() == totalSize)) {
+                    mips.addGlobal(sb.toString());
+                    sb = new StringBuilder(); // 清空 buffer
+                    count = 0;
+                } else {
                     sb.append(", ");
                 }
             }
 
             // 2. 处理补零逻辑
-            // 如果提供的元素少于声明的大小，剩余部分补 0
-            int providedSize = elements.size();
-            for (int i = providedSize; i < totalSize; i++) {
+            for (int i = elements.size(); i < totalSize; i++) {
+                if (count == 0) sb.append(".word ");
+
                 sb.append("0");
-                if (i < totalSize - 1) {
+                count++;
+
+                if (count == 50 || i == totalSize - 1) {
+                    mips.addGlobal(sb.toString());
+                    sb = new StringBuilder();
+                    count = 0;
+                } else {
                     sb.append(", ");
                 }
             }
-
-            mips.addGlobal(sb.toString());
         }
     }
 
