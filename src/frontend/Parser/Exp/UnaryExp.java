@@ -19,9 +19,7 @@ public class UnaryExp extends Node {
 
     public void parser() {
         //UnaryExp → PrimaryExp | Ident '(' [FuncRParams] ')' | UnaryOp UnaryExp
-        if (this.peekToken(0).getLexeme().equals("+") ||
-                this.peekToken(0).getLexeme().equals("-") ||
-                this.peekToken(0).getLexeme().equals("!")) {
+        if (this.peekToken(0).getLexeme().equals("+") || this.peekToken(0).getLexeme().equals("-") || this.peekToken(0).getLexeme().equals("!")) {
             //UnaryOp
             UnaryOp unaryOp = new UnaryOp(GrammarType.UnaryOp, this.getIndex(), this.getTokens());
             this.addChild(unaryOp);

@@ -3,37 +3,34 @@ package frontend.Parser.Exp;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
-import midend.Symbol.SymbolType;
 import frontend.Token;
+import midend.Symbol.SymbolType;
 
 import java.util.ArrayList;
 
 public class AddExp extends Node {
-    public AddExp(GrammarType type,int index, ArrayList<Token> tokens) {
-        super(type,index,tokens);
+    public AddExp(GrammarType type, int index, ArrayList<Token> tokens) {
+        super(type, index, tokens);
     }
 
     public void parser() {
         //加减表达式 AddExp → MulExp | AddExp ('+' | '−') MulExp
-        MulExp mulExp = new MulExp(GrammarType.MulExp,this.getIndex(),this.getTokens());
+        MulExp mulExp = new MulExp(GrammarType.MulExp, this.getIndex(), this.getTokens());
         this.addChild(mulExp);
         mulExp.parser();
-        if(this.peekToken(0).getLexeme().equals("+")||
-                this.peekToken(0).getLexeme().equals("-")){
+        if (this.peekToken(0).getLexeme().equals("+") || this.peekToken(0).getLexeme().equals("-")) {
             this.printTypeToFile();// AddExp
         }
         //+或-
-        while (this.peekToken(0).getLexeme().equals("+")||
-                this.peekToken(0).getLexeme().equals("-")) {
-            ConstToken op = new ConstToken(GrammarType.Token,this.getIndex(),this.getTokens());
+        while (this.peekToken(0).getLexeme().equals("+") || this.peekToken(0).getLexeme().equals("-")) {
+            ConstToken op = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
             this.addChild(op);
             op.parser();
 
-            MulExp mulExp1 = new MulExp(GrammarType.MulExp,this.getIndex(),this.getTokens());
+            MulExp mulExp1 = new MulExp(GrammarType.MulExp, this.getIndex(), this.getTokens());
             this.addChild(mulExp1);
             mulExp1.parser();
-            if(this.peekToken(0).getLexeme().equals("+")||
-                    this.peekToken(0).getLexeme().equals("-")){
+            if (this.peekToken(0).getLexeme().equals("+") || this.peekToken(0).getLexeme().equals("-")) {
                 this.printTypeToFile();// AddExp
             }
         }
@@ -51,9 +48,9 @@ public class AddExp extends Node {
     }
 
     public SymbolType getExpType() {
-        for(int i =0;i<this.getChildren().size();i+=2){
+        for (int i = 0; i < this.getChildren().size(); i += 2) {
             MulExp mulExp = this.GetChildAsMulExpByIndex(i);
-            if(mulExp.getExpType()){
+            if (mulExp.getExpType()) {
                 return SymbolType.ARRAY;
             }
         }

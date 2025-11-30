@@ -8,7 +8,7 @@ import midend.Visit.Stmt.VisitorLVal;
 public class VisitorPrimaryExp {
     public static void VisitPrimaryExp(PrimaryExp primaryExp) {
         // PrimaryExp → '(' Exp ')' | LVal | Number
-        if(primaryExp == null) {
+        if (primaryExp == null) {
             return;
         }
         if (primaryExp.getChildren().size() == 3) {
@@ -17,7 +17,7 @@ public class VisitorPrimaryExp {
         } else if (primaryExp.getChildren().size() == 1) {
             // LVal | Number
             if (primaryExp.IsChildLVal()) {
-                VisitorLVal.VisitLVal(primaryExp.GetChildAsLVal(),false);
+                VisitorLVal.VisitLVal(primaryExp.GetChildAsLVal(), false);
             }
         }
     }

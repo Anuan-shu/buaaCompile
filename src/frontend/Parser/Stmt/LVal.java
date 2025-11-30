@@ -13,6 +13,8 @@ import midend.Symbol.SymbolType;
 import java.util.ArrayList;
 
 public class LVal extends Node {
+    public boolean isConstExp = false;
+
     public LVal(GrammarType type, int index, ArrayList<Token> tokens) {
         super(type, index, tokens);
     }
@@ -96,6 +98,7 @@ public class LVal extends Node {
                     //数组下标越界
                     return 0;
                 }
+                isConstExp = true;
                 return symbolExp.getInitValues().get(index);
             }
         } else {
@@ -105,6 +108,7 @@ public class LVal extends Node {
                 if (symbolExp.getInitValues().isEmpty()) {
                     return 0;
                 }
+                isConstExp = true;
                 return symbolExp.getInitValues().get(0);
             }
         }

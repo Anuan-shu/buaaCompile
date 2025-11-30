@@ -3,29 +3,25 @@ package frontend.Parser.Exp;
 import frontend.Parser.Token.ConstToken;
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
-import midend.Symbol.SymbolType;
 import frontend.Token;
+import midend.Symbol.SymbolType;
 
 import java.util.ArrayList;
 
 public class MulExp extends Node {
     public MulExp(GrammarType type, int index, ArrayList<Token> tokens) {
-        super(type, index,tokens);
+        super(type, index, tokens);
     }
 
     public void parser() {
         UnaryExp unaryExp = new UnaryExp(GrammarType.UnaryExp, this.getIndex(), this.getTokens());
         this.addChild(unaryExp);
         unaryExp.parser();
-        if(this.peekToken(0).getLexeme().equals("*")||
-                this.peekToken(0).getLexeme().equals("/")||
-                this.peekToken(0).getLexeme().equals("%")){
+        if (this.peekToken(0).getLexeme().equals("*") || this.peekToken(0).getLexeme().equals("/") || this.peekToken(0).getLexeme().equals("%")) {
             this.printTypeToFile();// MulExp
         }
         //*或/或%
-        while (this.peekToken(0).getLexeme().equals("*")||
-        this.peekToken(0).getLexeme().equals("/")||
-                this.peekToken(0).getLexeme().equals("%")) {
+        while (this.peekToken(0).getLexeme().equals("*") || this.peekToken(0).getLexeme().equals("/") || this.peekToken(0).getLexeme().equals("%")) {
             //op
             ConstToken op = new ConstToken(GrammarType.Token, this.getIndex(), this.getTokens());
             this.addChild(op);
@@ -35,9 +31,7 @@ public class MulExp extends Node {
             UnaryExp unaryExp1 = new UnaryExp(GrammarType.UnaryExp, this.getIndex(), this.getTokens());
             this.addChild(unaryExp1);
             unaryExp1.parser();
-            if(this.peekToken(0).getLexeme().equals("*")||
-                    this.peekToken(0).getLexeme().equals("/")||
-                    this.peekToken(0).getLexeme().equals("%")){
+            if (this.peekToken(0).getLexeme().equals("*") || this.peekToken(0).getLexeme().equals("/") || this.peekToken(0).getLexeme().equals("%")) {
                 this.printTypeToFile();// MulExp
             }
         }
@@ -56,11 +50,9 @@ public class MulExp extends Node {
     }
 
     public boolean getExpType() {
-        for(int i =0;i<this.getChildren().size();i+=2){
+        for (int i = 0; i < this.getChildren().size(); i += 2) {
             UnaryExp unaryExp = this.GetChildAsUnaryExpByIndex(i);
-            if(unaryExp.getExpType().equals(SymbolType.CONST_INT_ARRAY)||
-            unaryExp.getExpType().equals(SymbolType.STATIC_INT_ARRAY)||
-            unaryExp.getExpType().equals(SymbolType.INT_ARRAY)){
+            if (unaryExp.getExpType().equals(SymbolType.CONST_INT_ARRAY) || unaryExp.getExpType().equals(SymbolType.STATIC_INT_ARRAY) || unaryExp.getExpType().equals(SymbolType.INT_ARRAY)) {
                 return true;
             }
         }

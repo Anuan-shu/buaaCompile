@@ -25,8 +25,7 @@ public class VisitorLVal {
         Symbol symbol = GlobalSymbolTable.searchSymbolByIdent(ident, lVal.GetLineNumber());
         //LVal 为常量时，不能对其修改。
         if (symbol != null) {
-            if (isLeftSide && (symbol.GetSymbolType().equals(SymbolType.CONST_INT)
-                    || symbol.GetSymbolType().equals(SymbolType.CONST_INT_ARRAY))) {
+            if (isLeftSide && (symbol.GetSymbolType().equals(SymbolType.CONST_INT) || symbol.GetSymbolType().equals(SymbolType.CONST_INT_ARRAY))) {
 
                 Error error = new Error(Error.ErrorType.h, lVal.GetLineNumber(), "h");
                 error.printToError(error);
@@ -57,6 +56,7 @@ public class VisitorLVal {
         if (lVal == null) {
             return null;
         }
+
         String Ident = lVal.getIdent();
         Exp exp = lVal.getIndexExp();
         Symbol symbol = GlobalSymbolTable.searchSymbolByIdent(Ident, lVal.GetLineNumber());

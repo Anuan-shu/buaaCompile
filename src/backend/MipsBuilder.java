@@ -103,7 +103,7 @@ public class MipsBuilder {
                     // 实体位于当前栈底 (也就是 -currentFunctionStackSize)
                     allocaArrayOffsets.put((AllocateInstruction) instr, -currentFunctionStackSize);
                 } else if (instr instanceof PhiInstr) {
-                    System.out.println("DEBUG: Allocating stack for Phi: " + instr.irName);
+                    //System.out.println("DEBUG: Allocating stack for Phi: " + instr.irName);
                     allocateStack(instr, 4);
                 } else if (!instr.irType.isVoid()) {
                     allocateStack(instr, 4);

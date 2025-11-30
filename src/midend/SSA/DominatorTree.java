@@ -51,6 +51,9 @@ public class DominatorTree {
 
         // 5. 计算支配边界 (Dominance Frontier)
         calculateDominanceFrontier();
+
+        // 6. 计算支配树深度
+        calculateDomDepth();
     }
 
     /**
@@ -213,4 +216,33 @@ public class DominatorTree {
     public IrBasicBlock getIDom(IrBasicBlock bb) {
         return idoms.get(bb);
     }
+
+    private Map<IrBasicBlock, Integer> domDepth = new HashMap<>();
+
+    // 在 build() 最后计算深度
+    private void calculateDomDepth() {
+        domDepth.clear();
+        // 对所有基本块计算深度
+        for (IrBasicBlock bb : function.getBasicBlocks()) {
+            int depth = 0;
+            IrBasicBlock runner = bb;
+            // 向上回溯直到根节点或 null
+            while (runner != null && idoms.get(runner) != null && runner != idoms.get(runner)) {
+                depth++;
+                runner = idoms.get(runner);
+            }
+            domDepth.put(bb, depth);
+        }
+        // 修正 Entry 深度为 0
+        domDepth.put(function.getEntryBlock(), 0);
+    }
+
+
+    public int getDomDepth(IrBasicBlock bb) {
+        if (!domDepth.containsKey(bb)) {
+            return Integer.MAX_VALUE;
+        }
+        return domDepth.get(bb);
+    }
+
 }

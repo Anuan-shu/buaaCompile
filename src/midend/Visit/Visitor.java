@@ -8,6 +8,11 @@ import midend.LLVM.IrModule;
 import midend.LLVM.Type.IrType;
 import midend.LLVM.ValueType;
 import midend.LLVM.value.IrFunction;
+import midend.Optimization.BlockMerge;
+import midend.Optimization.GlobalCodeMotion;
+import midend.Optimization.GlobalValueNumbering;
+import midend.Optimization.SimpleConstProp;
+import midend.SSA.DeadCodeElimination;
 import midend.SSA.Mem2Reg;
 import midend.Symbol.GlobalSymbolTable;
 import midend.Symbol.OutSymbolTable;
@@ -65,6 +70,23 @@ public class Visitor {
         if (optimize) {
             Mem2Reg mem2Reg = new Mem2Reg();
             mem2Reg.run(IrBuilder.getIrModule());
+
+            //死代码消除
+            DeadCodeElimination dce = new DeadCodeElimination();
+            dce.run(IrBuilder.getIrModule());
+
+            GlobalValueNumbering GlobalValueNumbering = new GlobalValueNumbering();
+            GlobalValueNumbering.run(IrBuilder.getIrModule()); // 先去重
+            GlobalCodeMotion globalCodeMotion = new GlobalCodeMotion();
+            globalCodeMotion.run(IrBuilder.getIrModule());     // 再移动 (包含 Loop 外提)
+            // 再次 DCE 清理 GVN 产生的死代码
+            dce.run(IrBuilder.getIrModule());
+
+            BlockMerge blockMerge = new BlockMerge();
+            blockMerge.run(IrBuilder.getIrModule());
+
+            SimpleConstProp simpleConstProp = new SimpleConstProp();
+            simpleConstProp.run(IrBuilder.getIrModule());
         }
     }
 

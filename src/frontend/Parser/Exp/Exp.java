@@ -2,8 +2,8 @@ package frontend.Parser.Exp;
 
 import frontend.Parser.Tree.GrammarType;
 import frontend.Parser.Tree.Node;
-import midend.Symbol.SymbolType;
 import frontend.Token;
+import midend.Symbol.SymbolType;
 
 import java.util.ArrayList;
 
@@ -31,7 +31,7 @@ public class Exp extends Node {
     }
 
     public int Evaluate() {
-        AddExp addExp = (AddExp)this.getChildren().get(0);
+        AddExp addExp = (AddExp) this.getChildren().get(0);
         return addExp.Evaluate();
     }
 }

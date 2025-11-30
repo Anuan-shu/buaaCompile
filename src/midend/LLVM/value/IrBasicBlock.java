@@ -55,6 +55,7 @@ public class IrBasicBlock extends IrValue {
 
     public void addInstruction(Instruction instruction) {
         instructions.add(instruction);
+        instruction.setParentBasicBlock(this);
     }
 
     public boolean isLastInstrReturn() {
@@ -103,5 +104,6 @@ public class IrBasicBlock extends IrValue {
     // 在列表头部插入指令 (Phi 节点必须在 Block 最前面)
     public void addInstructionFirst(Instruction instr) {
         this.instructions.add(0, instr);
+        instr.setParentBasicBlock(this);
     }
 }
