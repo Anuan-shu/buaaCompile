@@ -39,11 +39,6 @@ public class GlobalCodeMotion {
         loopAnalysis = new LoopAnalysis();
         loopAnalysis.run(func, domTree);
 
-        System.out.println("--- DomTree Depths for " + func.irName + " ---");
-        for (IrBasicBlock bb : func.getBasicBlocks()) {
-            System.out.println(bb.irName + ": " + domTree.getDomDepth(bb));
-        }
-
         buildUseDefChains(func);
 
         visited.clear();

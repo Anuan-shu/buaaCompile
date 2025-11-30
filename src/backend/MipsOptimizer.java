@@ -9,7 +9,7 @@ public class MipsOptimizer {
     public static List<String> optimize(List<String> sourceCode) {
         List<String> optimized = new ArrayList<>(sourceCode);
 
-        // 多次扫描，直到没有优化空间为止
+        // 多次扫描
         optimized = removeRedundantLoad(optimized);
 
         optimized = removeRedundantJumps(optimized);

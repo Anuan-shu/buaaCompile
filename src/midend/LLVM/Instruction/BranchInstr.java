@@ -40,4 +40,5 @@ public class BranchInstr extends Instruction {
             this.getUseValues().set(0, newVal);
         }
     }
+
 }

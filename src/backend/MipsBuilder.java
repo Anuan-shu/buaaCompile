@@ -114,6 +114,7 @@ public class MipsBuilder {
 
         // 2.1 输出函数标签 (去掉 @)
         String label = function.irName.substring(1);
+        label = label.replace("@", "").replace(".", "_");
         mips.addInst("\n" + label + ":");
 
         // 2.2 保存 $ra, $fp
@@ -171,8 +172,9 @@ public class MipsBuilder {
         String funcLabel = function.irName.substring(1);
         EmitInstruction emitter = new EmitInstruction(mips, offsetMap, allocaArrayOffsets, funcLabel);
         for (IrBasicBlock bb : function.getBasicBlocks()) {
+            String bbLabel = bb.irName.replace("@", "").replace(".", "_");
             // 生成块标签 (block_name:)
-            mips.addInst(label + "_" + bb.irName + ":");
+            mips.addInst(label + "_" + bbLabel + ":");
 
             for (Instruction instr : bb.getInstructions()) {
                 // 调用指令翻译器

@@ -80,4 +80,8 @@ public class AluInst extends Instruction {
             this.getUseValues().set(1, newVal);
         }
     }
+
+    public String getOpDire() {
+        return this.op;
+    }
 }

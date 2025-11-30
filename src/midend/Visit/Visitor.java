@@ -8,10 +8,7 @@ import midend.LLVM.IrModule;
 import midend.LLVM.Type.IrType;
 import midend.LLVM.ValueType;
 import midend.LLVM.value.IrFunction;
-import midend.Optimization.BlockMerge;
-import midend.Optimization.GlobalCodeMotion;
-import midend.Optimization.GlobalValueNumbering;
-import midend.Optimization.SimpleConstProp;
+import midend.Optimization.*;
 import midend.SSA.DeadCodeElimination;
 import midend.SSA.Mem2Reg;
 import midend.Symbol.GlobalSymbolTable;
@@ -68,6 +65,12 @@ public class Visitor {
         VisitorMainFuncDef.LLVMVisitMainFuncDef(comUnit.GetMainFuncDef());
 
         if (optimize) {
+            FunctionInlining functionInlining = new FunctionInlining();
+            functionInlining.run(IrBuilder.getIrModule());
+
+            BlockMerge blockMerge = new BlockMerge();
+            blockMerge.run(IrBuilder.getIrModule());
+
             Mem2Reg mem2Reg = new Mem2Reg();
             mem2Reg.run(IrBuilder.getIrModule());
 
@@ -82,7 +85,6 @@ public class Visitor {
             // 再次 DCE 清理 GVN 产生的死代码
             dce.run(IrBuilder.getIrModule());
 
-            BlockMerge blockMerge = new BlockMerge();
             blockMerge.run(IrBuilder.getIrModule());
 
             SimpleConstProp simpleConstProp = new SimpleConstProp();

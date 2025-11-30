@@ -402,10 +402,11 @@ public class EmitInstruction {
         IrBasicBlock currentBlock = (IrBasicBlock) instr.getParent();
         IrBasicBlock trueBlock = instr.getTrueBlock();
         IrBasicBlock falseBlock = instr.getFalseBlock();
-
+        String trueName = trueBlock.irName.replace("@", "");
+        String falseName = falseBlock.irName.replace("@", "");
         // 获取 Block 的纯名字 (去掉 function名等前缀)
-        String trueLabel = currentFuncLabel + "_" + instr.getTrueBlock().irName;
-        String falseLabel = currentFuncLabel + "_" + instr.getFalseBlock().irName;
+        String trueLabel = currentFuncLabel + "_" + trueName;
+        String falseLabel = currentFuncLabel + "_" + falseName;
 
         // 如果 cond != 0 (true)，跳转 trueLabel
 
@@ -440,8 +441,9 @@ public class EmitInstruction {
         // 处理 Phi Copy
         resolvePhiCopies(targetBlock, currentBlock);
 
+        String targetName = targetBlock.irName.replace("@", "");
         // 无条件跳转: j label %target
-        String targetLabel = currentFuncLabel + "_" + instr.getTargetBlock().irName;
+        String targetLabel = currentFuncLabel + "_" + targetName;
         mips.addInst("j " + targetLabel);
         mips.addInst("nop");
     }

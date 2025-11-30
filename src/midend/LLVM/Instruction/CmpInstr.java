@@ -77,4 +77,8 @@ public class CmpInstr extends Instruction {
             this.getUseValues().set(1, newVal);
         }
     }
+
+    public String getOpDire() {
+        return op;
+    }
 }
