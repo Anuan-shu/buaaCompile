@@ -15,11 +15,17 @@ public class ZextInstr extends Instruction {
     }
 
     public String toString() {
-        return this.irName + " = zext " + this.getUseValues().get(0).irType.toString() + " " + this.getUseValues().get(0).irName +
-                " to " + this.targetType.toString();
+        return this.irName + " = zext " + this.getUseValues().get(0).irType.toString() + " " + this.getUseValues().get(0).irName + " to " + this.targetType.toString();
     }
 
     public IrValue getOperand(int i) {
         return this.getUseValues().get(i);
+    }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.getUseValues().get(0) == oldVal) {
+            this.getUseValues().set(0, newVal);
+        }
     }
 }

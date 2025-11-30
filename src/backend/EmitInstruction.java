@@ -3,8 +3,10 @@ package backend;
 import midend.LLVM.Const.IrConstInt;
 import midend.LLVM.Const.IrConstString;
 import midend.LLVM.Instruction.*;
+import midend.LLVM.value.IrBasicBlock;
 import midend.LLVM.value.IrGlobalValue;
 import midend.LLVM.value.IrValue;
+import midend.SSA.PhiInstr;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -74,6 +76,9 @@ public class EmitInstruction {
                 mips.addInst("andi $t0, $t0, 255");
             }
             saveReg(instr, "$t0");
+        } else if (instr instanceof PhiInstr) {
+            // 什么都不做
+            // Phi 的代码生成已经在前驱块的跳转处完成了 (resolvePhiCopies)
         }
         // 其他指令
     }
@@ -100,7 +105,7 @@ public class EmitInstruction {
             // 情况4: 局部变量/临时变量 -> lw $t0, offset($fp)
             Integer offset = offsetMap.get(val);
             if (offset == null) {
-                System.err.println("Error: Value not found in stack map: " + val.irName);
+                System.err.println("Error: Value not found: " + val.irName + " Class: " + val.getClass().getSimpleName());
                 return;
             }
             if (offset >= -32768 && offset <= 32767) {
@@ -394,6 +399,10 @@ public class EmitInstruction {
         // 条件跳转: br i1 %cond, label %true, label %false
         loadToReg(instr.getCond(), "$t0");
 
+        IrBasicBlock currentBlock = (IrBasicBlock) instr.getParent();
+        IrBasicBlock trueBlock = instr.getTrueBlock();
+        IrBasicBlock falseBlock = instr.getFalseBlock();
+
         // 获取 Block 的纯名字 (去掉 function名等前缀)
         String trueLabel = currentFuncLabel + "_" + instr.getTrueBlock().irName;
         String falseLabel = currentFuncLabel + "_" + instr.getFalseBlock().irName;
@@ -404,10 +413,18 @@ public class EmitInstruction {
         // 如果 $t0 == 0 (即不满足条件)，跳过 j 指令
         mips.addInst("beqz $t0, " + skipLabel);
         mips.addInst("nop");
+
+        // 处理 True 块的 Phi
+        resolvePhiCopies(trueBlock, currentBlock);
+
         // 只有满足条件才执行这个长跳转
         mips.addInst("j " + trueLabel);
         mips.addInst("nop");
+
         mips.addInst(skipLabel + ":");
+
+        // 处理 False 块的 Phi
+        resolvePhiCopies(falseBlock, currentBlock);
 
         // 否则跳转 falseLabel
         mips.addInst("j " + falseLabel);
@@ -416,6 +433,13 @@ public class EmitInstruction {
     }
 
     private void emitJump(JumpInstr instr) {
+        // 获取当前块和目标块
+        IrBasicBlock currentBlock = (IrBasicBlock) instr.getParent();
+        IrBasicBlock targetBlock = instr.getTargetBlock();
+
+        // 处理 Phi Copy
+        resolvePhiCopies(targetBlock, currentBlock);
+
         // 无条件跳转: j label %target
         String targetLabel = currentFuncLabel + "_" + instr.getTargetBlock().irName;
         mips.addInst("j " + targetLabel);
@@ -533,5 +557,39 @@ public class EmitInstruction {
         mips.addInst("addu $t2, $t0, $t1");
 
         saveReg(instr, "$t2");
+    }
+
+    /**
+     * 处理 Phi 消除：在跳转到 targetBlock 之前，将当前块流向 targetBlock 所需的值存入 Phi 的栈槽。
+     */
+    private void resolvePhiCopies(IrBasicBlock targetBlock, IrBasicBlock currentBlock) {
+        // 遍历目标块的指令，查看开头的 Phi 指令
+        for (Instruction instr : targetBlock.getInstructions()) {
+            // Phi 指令一定在 BasicBlock 的最前面，遇到非 Phi 指令就停止
+            if (!(instr instanceof PhiInstr)) {
+                break;
+            }
+
+            PhiInstr phi = (PhiInstr) instr;
+            ArrayList<IrBasicBlock> incomingBlocks = phi.getIncomingBlocks();
+            ArrayList<IrValue> incomingValues = phi.getIncomingValues();
+
+            // 在 Phi 的来源列表中找到当前块
+            for (int i = 0; i < incomingBlocks.size(); i++) {
+                if (incomingBlocks.get(i) == currentBlock) {
+                    IrValue srcVal = incomingValues.get(i);
+
+                    // 生成 Copy 代码： srcVal -> $t0 -> PhiStackSlot
+                    // 1. 加载来源值到寄存器
+                    loadToReg(srcVal, "$t0");
+
+                    // 2. 将寄存器值存入 Phi 指令在栈上的位置
+                    // 注意：这里复用 saveReg，它会去 offsetMap 查 phi 的位置
+                    saveReg(phi, "$t0");
+
+                    break; // 找到对应分支后跳出内层循环，处理下一个 Phi
+                }
+            }
+        }
     }
 }

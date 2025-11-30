@@ -1,7 +1,5 @@
 package midend.LLVM.Instruction;
 
-import midend.LLVM.ValueType;
-
 public class InstructionType {
     public static final InstructionType ALLOCATE = new InstructionType("allocate");
     public static final InstructionType LOAD = new InstructionType("load");
@@ -16,6 +14,7 @@ public class InstructionType {
     public static final InstructionType BRANCH = new InstructionType("branch");
     public static final InstructionType JUMP = new InstructionType("jump");
     public static final InstructionType PRINT = new InstructionType("print");
+    public static final InstructionType PHI = new InstructionType("phi");
     private String typeName;
 
     public InstructionType(String typeName) {

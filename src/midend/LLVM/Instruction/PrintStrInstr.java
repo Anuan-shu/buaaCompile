@@ -24,4 +24,11 @@ public class PrintStrInstr extends Instruction {
     public IrValue getPrintValue() {
         return this.formatString;
     }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.formatString == oldVal) {
+            this.formatString = (IrConstString) newVal;
+        }
+    }
 }

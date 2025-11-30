@@ -39,8 +39,7 @@ public class AluInst extends Instruction {
     public String toString() {
         IrValue leftValue = this.getUseValues().get(0);
         IrValue rightValue = this.getUseValues().get(1);
-        return this.irName + " = " + transOp(op) +
-                " i32 " + leftValue.irName + ", " + rightValue.irName;
+        return this.irName + " = " + transOp(op) + " i32 " + leftValue.irName + ", " + rightValue.irName;
     }
 
     public IrValue getLeft() {
@@ -69,6 +68,16 @@ public class AluInst extends Instruction {
                 return "OR";
             default:
                 return "unknown_op";
+        }
+    }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.getUseValues().get(0) == oldVal) {
+            this.getUseValues().set(0, newVal);
+        }
+        if (this.getUseValues().get(1) == oldVal) {
+            this.getUseValues().set(1, newVal);
         }
     }
 }

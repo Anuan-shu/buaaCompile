@@ -8,6 +8,7 @@ import midend.LLVM.Instruction.AllocateInstruction;
 import midend.LLVM.Instruction.Instruction;
 import midend.LLVM.IrModule;
 import midend.LLVM.value.*;
+import midend.SSA.PhiInstr;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -101,6 +102,9 @@ public class MipsBuilder {
                     // 3. 记录数组实体相对于 $fp 的偏移量
                     // 实体位于当前栈底 (也就是 -currentFunctionStackSize)
                     allocaArrayOffsets.put((AllocateInstruction) instr, -currentFunctionStackSize);
+                } else if (instr instanceof PhiInstr) {
+                    System.out.println("DEBUG: Allocating stack for Phi: " + instr.irName);
+                    allocateStack(instr, 4);
                 } else if (!instr.irType.isVoid()) {
                     allocateStack(instr, 4);
                 }

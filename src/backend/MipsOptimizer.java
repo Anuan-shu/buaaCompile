@@ -37,7 +37,7 @@ public class MipsOptimizer {
             // 解析当前行
             String trimmed = line.trim();
             // 简单的分割：按空格或逗号
-            // 示例: "sw $t0, -24($fp)" -> ["sw", "$t0", "-24($fp)"]
+            // "sw $t0, -24($fp)" -> ["sw", "$t0", "-24($fp)"]
             String[] parts = trimmed.split("[\\s,]+");
 
             boolean keepLine = true;

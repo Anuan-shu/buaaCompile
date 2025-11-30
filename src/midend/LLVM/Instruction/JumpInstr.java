@@ -3,6 +3,7 @@ package midend.LLVM.Instruction;
 import midend.LLVM.Type.IrType;
 import midend.LLVM.ValueType;
 import midend.LLVM.value.IrBasicBlock;
+import midend.LLVM.value.IrValue;
 
 public class JumpInstr extends Instruction {
     private IrBasicBlock targetBlock;
@@ -19,5 +20,12 @@ public class JumpInstr extends Instruction {
 
     public String toString() {
         return "br label %" + targetBlock.irName;
+    }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.targetBlock == oldVal) {
+            this.targetBlock = (IrBasicBlock) newVal;
+        }
     }
 }

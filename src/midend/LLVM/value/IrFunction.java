@@ -60,4 +60,11 @@ public class IrFunction extends IrValue {
         sb.append("}\n");
         return sb.toString();
     }
+
+    public IrBasicBlock getEntryBlock() {
+        if (basicBlocks.size() > 0) {
+            return basicBlocks.get(0);
+        }
+        return null;
+    }
 }

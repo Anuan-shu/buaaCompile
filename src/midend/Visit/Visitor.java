@@ -8,6 +8,7 @@ import midend.LLVM.IrModule;
 import midend.LLVM.Type.IrType;
 import midend.LLVM.ValueType;
 import midend.LLVM.value.IrFunction;
+import midend.SSA.Mem2Reg;
 import midend.Symbol.GlobalSymbolTable;
 import midend.Symbol.OutSymbolTable;
 import midend.Symbol.Symbol;
@@ -20,6 +21,7 @@ import java.io.FileOutputStream;
 
 public class Visitor {
     private final ComUnit comUnit;
+    public boolean optimize = false;
 
     public Visitor(ComUnit comUnit) {
         this.comUnit = comUnit;
@@ -27,14 +29,11 @@ public class Visitor {
 
     public void Visit() {
         //添加库函数定义
-        OutSymbolTable.addSymbol(new Symbol("getint", SymbolType.VOID_FUNC,
-                0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "@getint")));
+        OutSymbolTable.addSymbol(new Symbol("getint", SymbolType.VOID_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "@getint")));
 
-        OutSymbolTable.addSymbol(new Symbol("main", SymbolType.INT_FUNC,
-                0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "main")));
+        OutSymbolTable.addSymbol(new Symbol("main", SymbolType.INT_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "main")));
 
-        OutSymbolTable.addSymbol(new Symbol("printf", SymbolType.VOID_FUNC,
-                0, new IrFunction(ValueType.FUNCTION, IrType.VOID, "printf")));
+        OutSymbolTable.addSymbol(new Symbol("printf", SymbolType.VOID_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.VOID, "printf")));
 
         // 遍历所有声明
         for (Decl decl : comUnit.GetDecls()) {
@@ -48,7 +47,8 @@ public class Visitor {
         VisitorMainFuncDef.VisitMainFuncDef(comUnit.GetMainFuncDef());
     }
 
-    public void llvmVisit() {
+    public void llvmVisit(boolean optimize) {
+        this.optimize = optimize;
         //符号表初始化
         GlobalSymbolTable.setLocalSymbolTable(GlobalSymbolTable.getGlobalSymbolTable());
         // 遍历所有声明
@@ -61,6 +61,11 @@ public class Visitor {
         }
         // 处理主函数
         VisitorMainFuncDef.LLVMVisitMainFuncDef(comUnit.GetMainFuncDef());
+
+        if (optimize) {
+            Mem2Reg mem2Reg = new Mem2Reg();
+            mem2Reg.run(IrBuilder.getIrModule());
+        }
     }
 
     public void writeLLVMToFile(String file) {

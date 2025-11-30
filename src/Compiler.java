@@ -31,7 +31,7 @@ public class Compiler {
             visitor.Visit();
 //            writeSymbolTableToFile("symbol.txt");
 //            writeAllErrorsToFile(errorfile);
-            visitor.llvmVisit();
+            visitor.llvmVisit(true);
             visitor.writeLLVMToFile("llvm_ir.txt");
             Backend backend = new Backend();
             backend.generateMips(true);

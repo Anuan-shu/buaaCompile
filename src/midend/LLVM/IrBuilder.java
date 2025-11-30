@@ -277,4 +277,9 @@ public class IrBuilder {
         return allocateInstruction;
     }
 
+    public static String GetPhiName() {
+        return "%phi_" + (phiCount++);
+    }
+
+    private static int phiCount = 0;
 }

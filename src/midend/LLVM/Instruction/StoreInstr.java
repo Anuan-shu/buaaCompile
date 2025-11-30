@@ -25,4 +25,17 @@ public class StoreInstr extends Instruction {
     public IrValue getPtr() {
         return this.getUseValues().get(1);
     }
+
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        // Store 有两个操作数：val (要存的值) 和 ptr (地址)
+        // 通常只替换 val，ptr 如果被替换说明 ptr 本身是 Load 出来的（多级指针），也要处理
+        if (this.getUseValues().get(0) == oldVal) {
+            this.getUseValues().set(0, newVal);
+        }
+        if (this.getUseValues().get(1) == oldVal) {
+            this.getUseValues().set(1, newVal);
+        }
+    }
 }

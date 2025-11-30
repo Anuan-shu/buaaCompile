@@ -5,7 +5,7 @@ import midend.LLVM.ValueType;
 import midend.LLVM.value.IrValue;
 
 public class ReturnInstr extends Instruction {
-    private final IrValue returnValue;
+    private IrValue returnValue;
 
     public ReturnInstr(IrValue returnValue) {
         super(ValueType.RETURN_INST, IrType.VOID, "return", InstructionType.RETURN);
@@ -27,5 +27,12 @@ public class ReturnInstr extends Instruction {
 
     public IrValue getReturnValue() {
         return returnValue;
+    }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.returnValue == oldVal) {
+            this.returnValue = newVal;
+        }
     }
 }

@@ -25,4 +25,11 @@ public class LoadInstr extends Instruction {
     public IrValue getPtr() {
         return this.getUseValues().get(0);
     }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.getUseValues().get(0) == oldVal) {
+            this.getUseValues().set(0, newVal);
+        }
+    }
 }

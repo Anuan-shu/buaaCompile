@@ -62,4 +62,15 @@ public class CallInstr extends Instruction {
     public IrFunction getTargetFunction() {
         return (IrFunction) this.getUseValues().get(0);
     }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        // 遍历参数列表进行替换
+        ArrayList<IrValue> parameters = this.getUseValues();
+        for (int i = 1; i < parameters.size(); i++) {
+            if (parameters.get(i) == oldVal) {
+                parameters.set(i, newVal);
+            }
+        }
+    }
 }

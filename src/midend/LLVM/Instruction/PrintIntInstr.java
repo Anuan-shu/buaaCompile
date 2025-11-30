@@ -20,4 +20,11 @@ public class PrintIntInstr extends Instruction {
     public IrValue getPrintValue() {
         return this.getUseValues().get(0);
     }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.getUseValues().get(0) == oldVal) {
+            this.getUseValues().set(0, newVal);
+        }
+    }
 }

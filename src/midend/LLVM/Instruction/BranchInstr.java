@@ -33,4 +33,11 @@ public class BranchInstr extends Instruction {
     public IrBasicBlock getFalseBlock() {
         return (IrBasicBlock) this.getUseValues().get(2);
     }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.getUseValues().get(0) == oldVal) {
+            this.getUseValues().set(0, newVal);
+        }
+    }
 }

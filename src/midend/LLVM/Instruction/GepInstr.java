@@ -57,4 +57,14 @@ public class GepInstr extends Instruction {
     public IrValue getIndice() {
         return this.getUseValues().get(1);
     }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.getUseValues().get(0) == oldVal) {
+            this.getUseValues().set(0, newVal);
+        }
+        if (this.getUseValues().get(1) == oldVal) {
+            this.getUseValues().set(1, newVal);
+        }
+    }
 }

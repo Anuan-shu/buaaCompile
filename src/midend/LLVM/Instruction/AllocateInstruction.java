@@ -3,6 +3,7 @@ package midend.LLVM.Instruction;
 import midend.LLVM.Type.IrPointer;
 import midend.LLVM.Type.IrType;
 import midend.LLVM.ValueType;
+import midend.LLVM.value.IrValue;
 
 public class AllocateInstruction extends Instruction {
     private final IrType allocatedType;
@@ -31,5 +32,10 @@ public class AllocateInstruction extends Instruction {
             return elementSize * numElements;
         }
         return 4; // 默认返回4字节
+    }
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        
     }
 }

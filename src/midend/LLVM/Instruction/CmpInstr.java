@@ -66,4 +66,15 @@ public class CmpInstr extends Instruction {
                 return "unknown_op";
         }
     }
+
+
+    @Override
+    public void replaceUse(IrValue oldVal, IrValue newVal) {
+        if (this.getUseValues().get(0) == oldVal) {
+            this.getUseValues().set(0, newVal);
+        }
+        if (this.getUseValues().get(1) == oldVal) {
+            this.getUseValues().set(1, newVal);
+        }
+    }
 }
