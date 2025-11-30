@@ -10,6 +10,7 @@ import midend.SSA.PhiInstr;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 public class EmitInstruction {
@@ -20,11 +21,21 @@ public class EmitInstruction {
     private final HashMap<AllocateInstruction, Integer> allocaArrayOffsets;
     private boolean optimize = false;
 
-    public EmitInstruction(MipsModule mips, HashMap<IrValue, Integer> offsetMap, HashMap<AllocateInstruction, Integer> allocaArrayOffsets, String currentFuncLabel) {
+    private final Map<IrValue, Integer> regAllocation;
+    private final Map<Integer, Integer> sRegStackOffsets; // 用于 epilogue 恢复
+
+    public EmitInstruction(MipsModule mips,
+                           HashMap<IrValue, Integer> offsetMap,
+                           HashMap<AllocateInstruction, Integer> allocaArrayOffsets,
+                           String currentFuncLabel,
+                           Map<IrValue, Integer> regAllocation,
+                           Map<Integer, Integer> sRegStackOffsets) {
         this.mips = mips;
         this.offsetMap = offsetMap;
         this.allocaArrayOffsets = allocaArrayOffsets;
         this.currentFuncLabel = currentFuncLabel;
+        this.regAllocation = regAllocation;
+        this.sRegStackOffsets = sRegStackOffsets;
     }
 
     // --- 入口方法 ---
@@ -87,38 +98,44 @@ public class EmitInstruction {
      * 将 IrValue 的值加载到 MIPS 寄存器 reg 中
      */
     private void loadToReg(IrValue val, String reg) {
+        // 1. 优先检查寄存器分配
+        if (regAllocation != null && regAllocation.containsKey(val)) {
+            int allocatedIdx = regAllocation.get(val);
+            String allocatedRegName = RegisterAllocator.REG_NAMES[allocatedIdx];
+            if (!reg.equals(allocatedRegName)) {
+                mips.addInst("move " + reg + ", " + allocatedRegName);
+            }
+            return; // 【关键】找到寄存器后立即返回
+        }
+
+        // 2. 常量/全局变量
         if (val instanceof IrConstInt) {
-            // 情况1: 立即数 -> li $t0, 10
             int imm = ((IrConstInt) val).getValue();
             mips.addInst(String.format("li %s, %d", reg, imm));
+            return;
         } else if (val instanceof IrGlobalValue) {
-            // 情况2: 全局变量（本质是地址） -> la $t0, label
-            String label = val.irName.substring(1); // 去掉 @
+            String label = val.irName.substring(1);
             mips.addInst(String.format("la %s, %s", reg, label));
+            return;
         } else if (val instanceof IrConstString) {
-            // 情况3: 字符串常量 -> la $t0, label
-            // 字符串常量也是放在 .data 段的，需要加载其标签地址
-            String label = val.irName.substring(1); // 去掉 @
+            String label = val.irName.substring(1);
             mips.addInst(String.format("la %s, %s", reg, label));
+            return;
+        }
 
-        } else {
-            // 情况4: 局部变量/临时变量 -> lw $t0, offset($fp)
-            Integer offset = offsetMap.get(val);
-            if (offset == null) {
-                System.err.println("Error: Value not found: " + val.irName + " Class: " + val.getClass().getSimpleName());
-                return;
-            }
+        // 3. 栈加载 (Spill)
+        Integer offset = offsetMap.get(val);
+        if (offset != null) {
             if (offset >= -32768 && offset <= 32767) {
                 mips.addInst(String.format("lw %s, %d($fp)", reg, offset));
             } else {
-                // 如果超限，需要拆分指令
-                // 1. 加载偏移量到 $at (汇编保留寄存器，或者找个临时寄存器如 $t8)
                 mips.addInst("li $at, " + offset);
-                // 2. 计算绝对地址: $at = $at + $fp
                 mips.addInst("addu $at, $at, $fp");
-                // 3. 读取: lw $t0, 0($at)
                 mips.addInst(String.format("lw %s, 0($at)", reg));
             }
+        } else {
+            // 防御性：未分配空间且未分配寄存器 (可能是死代码遗留)
+            mips.addInst("li " + reg + ", 0");
         }
     }
 
@@ -126,6 +143,17 @@ public class EmitInstruction {
      * 将寄存器 reg 的值保存回 IrValue 对应的栈位置
      */
     private void saveReg(IrValue dest, String reg) {
+        // 1. 优先检查寄存器分配
+        if (regAllocation != null && regAllocation.containsKey(dest)) {
+            int allocatedIdx = regAllocation.get(dest);
+            String allocatedRegName = RegisterAllocator.REG_NAMES[allocatedIdx];
+            if (!reg.equals(allocatedRegName)) {
+                mips.addInst("move " + allocatedRegName + ", " + reg);
+            }
+            return; // 【关键】存入寄存器后立即返回
+        }
+
+        // 2. 栈存储 (Spill)
         Integer offset = offsetMap.get(dest);
         if (offset != null) {
             if (offset >= -32768 && offset <= 32767) {
@@ -450,63 +478,53 @@ public class EmitInstruction {
 
     // 6. Call 指令
     private void emitCall(CallInstr instr) {
-        // 6.1 准备参数
         ArrayList<IrValue> args = instr.getParameters();
-
         int stackArgs = Math.max(0, args.size() - 4);
+        // 栈对齐 (8字节)
+        if (stackArgs * 4 % 8 != 0) stackArgs++;
 
-        // 1. 如果有栈参数，先腾出空间！防止覆盖局部变量
-        if (stackArgs > 0) {
-            mips.addInst("addiu $sp, $sp, -" + (stackArgs * 4));
-        }
+        if (stackArgs > 0) mips.addInst("addiu $sp, $sp, -" + (stackArgs * 4));
 
         for (int i = 0; i < args.size(); i++) {
             IrValue arg = args.get(i);
             if (i < 4) {
-                // 前4个参数 -> $a0 - $a3
                 loadToReg(arg, "$a" + i);
             } else {
-                // >4个参数 -> 压栈 (存到 $sp + 4*offset)
-                // 注意：这里是对当前 $sp 的相对偏移，参数区通常在栈顶底部
                 loadToReg(arg, "$t0");
                 mips.addInst(String.format("sw $t0, %d($sp)", (i - 4) * 4));
-                // 注意：如果你的栈帧设计预留了 caller argument area，这里直接写
-                // 如果没有动态 sub $sp，需要确认 $sp 指向的位置
             }
         }
 
-        // 6.2 跳转
         String funcName = instr.getTargetFunction().irName.replace("@", "");
         mips.addInst("jal " + funcName);
         mips.addInst("nop");
 
-        // 调用完恢复栈指针
-        if (stackArgs > 0) {
-            mips.addInst("addiu $sp, $sp, " + (stackArgs * 4));
-        }
-
-        // 6.3 处理返回值
-        // 如果 call 指令有返回值 (不是 void)，则结果在 $v0
-        if (!instr.irType.isVoid()) {
-            saveReg(instr, "$v0");
-        }
+        if (stackArgs > 0) mips.addInst("addiu $sp, $sp, " + (stackArgs * 4));
+        if (!instr.irType.isVoid()) saveReg(instr, "$v0");
     }
 
     // 7. Ret 指令
     private void emitRet(ReturnInstr instr) {
-        if (!instr.isReturnVoid()) {
-            loadToReg(instr.getReturnValue(), "$v0");
-        }
+        if (!instr.isReturnVoid()) loadToReg(instr.getReturnValue(), "$v0");
+
         if (currentFuncLabel.equals("main")) {
-            // 如果是 main 函数，执行 syscall 10 (exit) 终止程序
             mips.addInst("li $v0, 10");
             mips.addInst("syscall");
         } else {
-            // 如果是普通函数，执行标准的栈帧恢复和返回
-            mips.addInst("move $sp, $fp");    // 恢复 sp
-            mips.addInst("lw $fp, -8($sp)");  // 恢复 fp
-            mips.addInst("lw $ra, -4($sp)");  // 恢复 ra
-            mips.addInst("jr $ra");           // 返回调用者
+            // 恢复 $s 寄存器
+            if (sRegStackOffsets != null) {
+                // 必须按顺序恢复，这里假设 Map 里的 Key 0-7 是对应的
+                for (int i = 0; i < 8; i++) {
+                    if (sRegStackOffsets.containsKey(i)) {
+                        mips.addInst(String.format("lw %s, %d($fp)",
+                                RegisterAllocator.REG_NAMES[i], sRegStackOffsets.get(i)));
+                    }
+                }
+            }
+            mips.addInst("move $sp, $fp");
+            mips.addInst("lw $fp, -8($sp)");
+            mips.addInst("lw $ra, -4($sp)");
+            mips.addInst("jr $ra");
             mips.addInst("nop");
         }
     }
@@ -565,33 +583,32 @@ public class EmitInstruction {
      * 处理 Phi 消除：在跳转到 targetBlock 之前，将当前块流向 targetBlock 所需的值存入 Phi 的栈槽。
      */
     private void resolvePhiCopies(IrBasicBlock targetBlock, IrBasicBlock currentBlock) {
-        // 遍历目标块的指令，查看开头的 Phi 指令
+        ArrayList<PhiInstr> phis = new ArrayList<>();
         for (Instruction instr : targetBlock.getInstructions()) {
-            // Phi 指令一定在 BasicBlock 的最前面，遇到非 Phi 指令就停止
-            if (!(instr instanceof PhiInstr)) {
-                break;
-            }
+            if (instr instanceof PhiInstr) phis.add((PhiInstr) instr);
+            else break;
+        }
+        if (phis.isEmpty()) return;
 
-            PhiInstr phi = (PhiInstr) instr;
-            ArrayList<IrBasicBlock> incomingBlocks = phi.getIncomingBlocks();
-            ArrayList<IrValue> incomingValues = phi.getIncomingValues();
-
-            // 在 Phi 的来源列表中找到当前块
-            for (int i = 0; i < incomingBlocks.size(); i++) {
-                if (incomingBlocks.get(i) == currentBlock) {
-                    IrValue srcVal = incomingValues.get(i);
-
-                    // 生成 Copy 代码： srcVal -> $t0 -> PhiStackSlot
-                    // 1. 加载来源值到寄存器
-                    loadToReg(srcVal, "$t0");
-
-                    // 2. 将寄存器值存入 Phi 指令在栈上的位置
-                    // 注意：这里复用 saveReg，它会去 offsetMap 查 phi 的位置
-                    saveReg(phi, "$t0");
-
-                    break; // 找到对应分支后跳出内层循环，处理下一个 Phi
+        // 1. 压栈
+        for (PhiInstr phi : phis) {
+            ArrayList<IrBasicBlock> blocks = phi.getIncomingBlocks();
+            ArrayList<IrValue> values = phi.getIncomingValues();
+            for (int i = 0; i < blocks.size(); i++) {
+                if (blocks.get(i) == currentBlock) {
+                    loadToReg(values.get(i), "$t0");
+                    mips.addInst("addiu $sp, $sp, -4");
+                    mips.addInst("sw $t0, 0($sp)");
+                    break;
                 }
             }
+        }
+        // 2. 弹栈
+        for (int i = phis.size() - 1; i >= 0; i--) {
+            PhiInstr phi = phis.get(i);
+            mips.addInst("lw $t0, 0($sp)");
+            mips.addInst("addiu $sp, $sp, 4");
+            saveReg(phi, "$t0");
         }
     }
 }

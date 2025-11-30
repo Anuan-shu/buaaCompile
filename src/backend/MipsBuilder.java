@@ -10,14 +10,15 @@ import midend.LLVM.IrModule;
 import midend.LLVM.value.*;
 import midend.SSA.PhiInstr;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 
 public class MipsBuilder {
     private static MipsModule mips = new MipsModule();
     private static HashMap<IrValue, Integer> offsetMap = new HashMap<>();
     private static int currentFunctionStackSize = 0;
     private static HashMap<AllocateInstruction, Integer> allocaArrayOffsets = new HashMap<>();
+
+    private static RegisterAllocator registerAllocator = new RegisterAllocator();
 
     // 给一个 Value 分配栈空间
     private static void allocateStack(IrValue value, int sizeBytes) {
@@ -32,7 +33,7 @@ public class MipsBuilder {
     }
 
     public static MipsModule generate(IrModule irModule, boolean optimize) {
-
+        mips = new MipsModule(); // 重置 Module 防止多次调用叠加
         // 1. 处理字符串常量
         for (IrConstString irConstString : irModule.getStringIrConstStringHashMap().values()) {
             emitStringConst(irConstString);
@@ -71,12 +72,22 @@ public class MipsBuilder {
         offsetMap.clear();
         currentFunctionStackSize = 0; // 重置栈计数
         allocaArrayOffsets.clear(); // 重置 alloca 数组偏移记录
+
+        Map<IrValue, Integer> regAllocation = null;
+        Set<Integer> usedSRegs = new HashSet<>();
+
+        if (optimize) {
+            regAllocation = registerAllocator.run(function);
+            usedSRegs.addAll(regAllocation.values());
+        } else {
+            regAllocation = new HashMap<>(); // 空 map
+        }
         // Step 1: 预计算栈空间
 
         // 1.1 为保存寄存器预留空间 ($ra, $fp)
         // $ra @ -4($fp), $fp @ -8($fp)
         currentFunctionStackSize += 8;
-
+        currentFunctionStackSize += (usedSRegs.size() * 4);
         // 1.2 为参数分配空间
         for (IrValue arg : function.getParameters()) {
             allocateStack(arg, 4); // 每个参数分配 4 字节
@@ -97,6 +108,9 @@ public class MipsBuilder {
 
                     // 2. 为数组实体分配 N 字节
                     int size = ((AllocateInstruction) instr).getAllocatedSize();
+                    if (size % 4 != 0) {
+                        size += (4 - (size % 4));
+                    }
                     currentFunctionStackSize += size;
 
                     // 3. 记录数组实体相对于 $fp 的偏移量
@@ -110,6 +124,11 @@ public class MipsBuilder {
                 }
             }
         }
+
+        if (currentFunctionStackSize % 8 != 0) {
+            currentFunctionStackSize += (8 - (currentFunctionStackSize % 8));
+        }
+
         // Step 2: 生成函数序言
 
         // 2.1 输出函数标签 (去掉 @)
@@ -120,6 +139,30 @@ public class MipsBuilder {
         // 2.2 保存 $ra, $fp
         mips.addInst("sw $ra, -4($sp)");
         mips.addInst("sw $fp, -8($sp)");
+
+
+        int extraSaveSize = 0;
+        // 建立一个 map 传给 EmitInstruction，用于函数返回时恢复寄存器
+        // Key: 寄存器索引(0-7), Value: 相对于 $fp 的栈偏移
+        Map<Integer, Integer> sRegStackOffsets = new HashMap<>();
+
+        if (optimize) {
+            // 直接遍历 0 到 7 (对应 $s0 到 $s7)
+            for (int i = 0; i < 8; i++) {
+                if (usedSRegs.contains(i)) {
+                    String sReg = RegisterAllocator.REG_NAMES[i]; // 获取 "$sX"
+
+                    extraSaveSize += 4;
+                    int currentOffset = -(8 + extraSaveSize); // 计算偏移: -12, -16 ...
+
+                    // 生成保存指令
+                    mips.addInst(String.format("sw %s, %d($sp)", sReg, currentOffset));
+
+                    // 记录偏移量，供 EmitInstruction 的 emitRet 使用
+                    sRegStackOffsets.put(i, currentOffset);
+                }
+            }
+        }
 
         // 2.3 更新 $fp 和 $sp
         mips.addInst("move $fp, $sp");
@@ -141,15 +184,16 @@ public class MipsBuilder {
             IrValue arg = args.get(i);
             int offset = offsetMap.get(arg);
 
+            // 检查参数是否被分配到了寄存器
+            Integer allocatedReg = regAllocation.get(arg);
+
             if (i < 4) {
-                // 前4个参数从寄存器存入栈
-                //mips.addInst("sw $a" + i + ", " + offset + "($fp)");
-                if (offset >= -32768 && offset <= 32767) {
-                    mips.addInst("sw $a" + i + ", " + offset + "($fp)");
+                if (allocatedReg != null) {
+                    // 优化：直接移入分配的寄存器 $sX
+                    mips.addInst("move " + RegisterAllocator.REG_NAMES[allocatedReg] + ", $a" + i);
                 } else {
-                    mips.addInst("li $at, " + offset);
-                    mips.addInst("addu $at, $fp, $at");
-                    mips.addInst("sw $a" + i + ", 0($at)");
+                    // 未分配寄存器：存入栈
+                    saveToStackOrReg("$a" + i, offset, true);
                 }
             } else {
                 // 1. 计算该参数在 Caller 栈帧中的位置
@@ -164,13 +208,19 @@ public class MipsBuilder {
                 // 3. 将参数保存到当前函数的局部栈帧
                 // offset 是 Step 1 分配的负偏移量
                 // 后续指令访问 %arg 时，统一去 offset($fp) 读取
-                mips.addInst("sw $t0, " + offset + "($fp)");
+                if (allocatedReg != null) {
+                    mips.addInst("move " + RegisterAllocator.REG_NAMES[allocatedReg] + ", $t0");
+                } else {
+                    saveToStackOrReg("$t0", offset, true);
+                }
             }
         }
 
         // Step 4: 遍历基本块 (Basic Blocks)
         String funcLabel = function.irName.substring(1);
-        EmitInstruction emitter = new EmitInstruction(mips, offsetMap, allocaArrayOffsets, funcLabel);
+
+        EmitInstruction emitter = new EmitInstruction(mips, offsetMap, allocaArrayOffsets, funcLabel, regAllocation, sRegStackOffsets);
+
         for (IrBasicBlock bb : function.getBasicBlocks()) {
             String bbLabel = bb.irName.replace("@", "").replace(".", "_");
             // 生成块标签 (block_name:)
@@ -180,6 +230,17 @@ public class MipsBuilder {
                 // 调用指令翻译器
                 emitter.emit(instr, optimize);
             }
+        }
+    }
+
+    // 辅助方法：处理大偏移量的 sw
+    private static void saveToStackOrReg(String srcReg, int offset, boolean useFp) {
+        if (offset >= -32768 && offset <= 32767) {
+            mips.addInst("sw " + srcReg + ", " + offset + "($fp)");
+        } else {
+            mips.addInst("li $at, " + offset);
+            mips.addInst("addu $at, $fp, $at");
+            mips.addInst("sw " + srcReg + ", 0($at)");
         }
     }
 
