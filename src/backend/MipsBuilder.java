@@ -68,6 +68,17 @@ public class MipsBuilder {
     }
 
     private static void emitFunction(IrFunction function, boolean optimize) {
+        boolean isLeaf = true;
+        for (IrBasicBlock bb : function.getBasicBlocks()) {
+            for (Instruction i : bb.getInstructions()) {
+                if (i instanceof midend.LLVM.Instruction.CallInstr) {
+                    isLeaf = false;
+                    break;
+                }
+            }
+            if (!isLeaf) break;
+        }
+
         // 0. 初始化状态
         offsetMap.clear();
         currentFunctionStackSize = 0; // 重置栈计数
@@ -157,7 +168,9 @@ public class MipsBuilder {
 
         // 4. 保存 $ra
         // 注意：此时已分配空间，使用 $fp 寻址 (因为 $fp == Old SP)
-        mips.addInst("sw $ra, -4($fp)");
+        if (!isLeaf) {
+            mips.addInst("sw $ra, -4($fp)");
+        }
 
         // 5. 保存 Callee-Saved 寄存器 ($sX)
         int extraSaveSize = 0;
@@ -235,7 +248,7 @@ public class MipsBuilder {
 
             for (Instruction instr : bb.getInstructions()) {
                 // 调用指令翻译器
-                emitter.emit(instr, optimize);
+                emitter.emit(instr, optimize, isLeaf);
             }
         }
     }

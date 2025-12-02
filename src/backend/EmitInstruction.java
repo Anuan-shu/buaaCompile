@@ -20,6 +20,7 @@ public class EmitInstruction {
     private final String currentFuncLabel;
     private final HashMap<AllocateInstruction, Integer> allocaArrayOffsets;
     private boolean optimize = false;
+    private boolean isLeaf = false;
 
     private final Map<IrValue, Integer> regAllocation;
     private final Map<Integer, Integer> sRegStackOffsets; // 用于 epilogue 恢复
@@ -39,7 +40,8 @@ public class EmitInstruction {
     }
 
     // --- 入口方法 ---
-    public void emit(Instruction instr, boolean optimize) {
+    public void emit(Instruction instr, boolean optimize, boolean isLeaf) {
+        this.isLeaf = isLeaf;
         this.optimize = optimize;
         if (instr instanceof AluInst) {
             emitBinary((AluInst) instr);
@@ -658,7 +660,9 @@ public class EmitInstruction {
             }
             mips.addInst("move $sp, $fp");
             mips.addInst("lw $fp, -8($sp)");
-            mips.addInst("lw $ra, -4($sp)");
+            if (!isLeaf) {
+                mips.addInst("lw $ra, -4($sp)");
+            }
             mips.addInst("jr $ra");
             mips.addInst("nop");
         }
