@@ -73,6 +73,7 @@ public class MipsBuilder {
         currentFunctionStackSize = 0; // 重置栈计数
         allocaArrayOffsets.clear(); // 重置 alloca 数组偏移记录
 
+
         Map<IrValue, Integer> regAllocation = null;
         Set<Integer> usedSRegs = new HashSet<>();
 
@@ -136,44 +137,50 @@ public class MipsBuilder {
         label = label.replace("@", "").replace(".", "_");
         mips.addInst("\n" + label + ":");
 
-        // 2.2 保存 $ra, $fp
-        mips.addInst("sw $ra, -4($sp)");
+        // 先建立栈帧指针，再开栈，最后保存寄存器
+
+        // 1. 保存旧的 $fp  到当前栈顶下方的预留位
         mips.addInst("sw $fp, -8($sp)");
 
+        // 2. 设置新的 $fp (指向当前栈帧的基址，即 Old SP)
+        mips.addInst("move $fp, $sp");
 
+        // 3. 分配栈空间 (更新 $sp)
+        if (currentFunctionStackSize > 32767) {
+            // 如果栈太大，不能用立即数，使用 $t0 中转
+            mips.addInst("li $t0, -" + currentFunctionStackSize);
+            mips.addInst("addu $sp, $sp, $t0");
+        } else {
+            // 栈较小，直接用 addiu
+            mips.addInst("addiu $sp, $sp, -" + currentFunctionStackSize);
+        }
+
+        // 4. 保存 $ra
+        // 注意：此时已分配空间，使用 $fp 寻址 (因为 $fp == Old SP)
+        mips.addInst("sw $ra, -4($fp)");
+
+        // 5. 保存 Callee-Saved 寄存器 ($sX)
         int extraSaveSize = 0;
         // 建立一个 map 传给 EmitInstruction，用于函数返回时恢复寄存器
-        // Key: 寄存器索引(0-7), Value: 相对于 $fp 的栈偏移
         Map<Integer, Integer> sRegStackOffsets = new HashMap<>();
 
         if (optimize) {
-            // 直接遍历 0 到 7 (对应 $s0 到 $s7)
-            for (int i = 0; i < 8; i++) {
+            // 遍历 RegisterAllocator 定义的正确常量范围
+            for (int i = RegisterAllocator.CALLEE_SAVED_START; i <= RegisterAllocator.CALLEE_SAVED_END; i++) {
                 if (usedSRegs.contains(i)) {
                     String sReg = RegisterAllocator.REG_NAMES[i]; // 获取 "$sX"
 
                     extraSaveSize += 4;
                     int currentOffset = -(8 + extraSaveSize); // 计算偏移: -12, -16 ...
 
-                    // 生成保存指令
-                    mips.addInst(String.format("sw %s, %d($sp)", sReg, currentOffset));
+                    // 使用 $fp 进行寻址
+                    // $sp 已经减过了，必须用 $fp
+                    mips.addInst(String.format("sw %s, %d($fp)", sReg, currentOffset));
 
                     // 记录偏移量，供 EmitInstruction 的 emitRet 使用
                     sRegStackOffsets.put(i, currentOffset);
                 }
             }
-        }
-
-        // 2.3 更新 $fp 和 $sp
-        mips.addInst("move $fp, $sp");
-        //mips.addInst("addiu $sp, $sp, -" + currentFunctionStackSize);
-        if (currentFunctionStackSize > 32767) {
-            // 如果栈太大，不能用立即数，需要用寄存器中转
-            mips.addInst("li $t0, -" + currentFunctionStackSize);
-            mips.addInst("addu $sp, $sp, $t0");
-        } else {
-            // 栈较小，直接用 addiu
-            mips.addInst("addiu $sp, $sp, -" + currentFunctionStackSize);
         }
 
         // Step 3: 保存参数

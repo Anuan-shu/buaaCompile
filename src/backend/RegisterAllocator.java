@@ -4,6 +4,7 @@ import midend.Analysis.LivenessAnalysis;
 import midend.LLVM.Instruction.*;
 import midend.LLVM.value.IrBasicBlock;
 import midend.LLVM.value.IrFunction;
+import midend.LLVM.value.IrParameter;
 import midend.LLVM.value.IrValue;
 import midend.SSA.PhiInstr;
 
@@ -11,9 +12,19 @@ import java.util.*;
 
 public class RegisterAllocator {
     public static final String[] REG_NAMES = {
-            "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7"
+            // Caller-Saved (临时寄存器)
+            "$t3", "$t4", "$t5", "$t6", "$t7", "$t8", "$t9",
+            // Callee-Saved (保存寄存器) - 对应索引 10 ~ 17
+            "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
+            // 特殊寄存器 (v1 通常可用作临时)
+            "$v1"
     };
-    private static final int MAX_REGISTERS = 8;
+    private static final int MAX_REGISTERS = REG_NAMES.length;
+
+    // 定义哪些索引是 Callee-Saved ($s0-$s7)
+    // 根据上面的数组，下标 10 到 17 是 $s 寄存器
+    public static final int CALLEE_SAVED_START = 7;
+    public static final int CALLEE_SAVED_END = 14;
 
     private Map<IrBasicBlock, Set<IrValue>> liveIn = new HashMap<>();
     private Map<IrBasicBlock, Set<IrValue>> liveOut = new HashMap<>();
@@ -22,8 +33,14 @@ public class RegisterAllocator {
     private Map<IrValue, Set<IrValue>> interferenceGraph = new HashMap<>();
     private Map<IrValue, Integer> allocation = new HashMap<>();
 
+    // 记录哪些变量跨越了函数调用 (Call Instruction)
+    private Set<IrValue> valuesCrossingCalls = new HashSet<>();
+
     public Map<IrValue, Integer> run(IrFunction function) {
         allocation.clear();
+        valuesCrossingCalls.clear();
+        interferenceGraph.clear();
+
         buildInterferenceGraph(function, new LivenessAnalysis());
         colorGraph();
         return allocation;
@@ -52,6 +69,13 @@ public class RegisterAllocator {
             for (int i = insts.size() - 1; i >= 0; i--) {
                 Instruction instr = insts.get(i);
 
+                // 检测跨越 Call 的变量 ---
+                if (instr instanceof CallInstr) {
+                    // 在 Call 指令处仍然活跃的变量，说明它们跨越了函数调用
+                    // 这些变量必须分配到 $s 寄存器，或者是 Spill 到栈上
+                    valuesCrossingCalls.addAll(liveNow);
+                }
+
                 // 1. 处理定义 (Def) - 建立冲突边
                 if (!instr.irType.isVoid()) {
                     // 当前指令定义的变量与所有当前活跃的变量冲突
@@ -70,7 +94,7 @@ public class RegisterAllocator {
                 // Phi 的操作数是在前驱块的末尾活跃的，而不是当前块。
                 if (!(instr instanceof PhiInstr)) {
                     for (IrValue operand : getOperands(instr)) {
-                        if (operand instanceof Instruction || operand instanceof midend.LLVM.value.IrParameter) {
+                        if (operand instanceof Instruction || operand instanceof IrParameter) {
                             liveNow.add(operand);
                         }
                     }
@@ -187,11 +211,34 @@ public class RegisterAllocator {
                     }
                 }
             }
+
+            // 根据变量是否跨越 Call 来限制颜色选择 ---
+            boolean isCrossCall = valuesCrossingCalls.contains(node);
+
+            int colorFound = -1;
             for (int color = 0; color < MAX_REGISTERS; color++) {
-                if (!usedColors.contains(color)) {
-                    allocation.put(node, color);
-                    break;
+                // 如果已经被邻居占用，跳过
+                if (usedColors.contains(color)) continue;
+
+                // 如果变量跨越 Call，它必须使用 Callee-Saved ($s0-$s7)
+                // 对应下标 CALLEE_SAVED_START 到 CALLEE_SAVED_END
+                if (isCrossCall) {
+                    if (color < CALLEE_SAVED_START || color > CALLEE_SAVED_END) {
+                        continue; // 跳过非 $s 寄存器
+                    }
                 }
+
+                colorFound = color;
+                break;
+            }
+
+            if (colorFound != -1) {
+                allocation.put(node, colorFound);
+            } else {
+                // Spill 发生
+                // 注意：如果 isCrossCall 为真，且 $s 用光了，即使 $t 还有空位也必须 Spill，
+                // 除非你在 Codegen 阶段对这个变量做了特殊的 Caller-Save 处理。
+                // 既然没做，这里就只能 Spill。
             }
         }
     }
