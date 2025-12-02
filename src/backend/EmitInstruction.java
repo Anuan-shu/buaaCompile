@@ -365,7 +365,6 @@ public class EmitInstruction {
         // 1. 智能准备操作数
         // 只有在必要时才使用 $t0, $t1
         String leftReg = getOpReg(instr.getLeft(), "$t0");
-        String rightReg = getOpReg(instr.getRight(), "$t1");
 
         // 2. 确定结果寄存器
         String destReg = "$t2"; // 默认为临时寄存器
@@ -386,11 +385,80 @@ public class EmitInstruction {
                 if (val != 0) {
                     optimized = tryOptimizeDiv(val, leftReg, destReg);
                 }
+            } else if (instr.getOp().equals("SREM")) {
+                // 公式: x % c = x - (x / c) * c
+                if (val != 0) {
+                    // 一个临时寄存器来存商
+                    // destReg 最终存余数，leftReg 存原数 x
+                    // 借用 $v1 作为临时寄存器
+                    String tempReg = "$v1";
+
+                    // 第一步：计算 quotient = x / c
+                    if (tryOptimizeDiv(val, leftReg, tempReg)) {
+                        // 计算 product = quotient * c
+                        boolean mulOptimized = tryOptimizeMul(val, tempReg, tempReg);
+                        // 乘法没能优化，回退到硬件乘法
+                        if (!mulOptimized) {
+                            mips.addInst("li $at, " + val);
+                            mips.addInst("mul " + tempReg + ", " + tempReg + ", $at");
+                        }
+
+                        // 第三步：计算 remainder = x - product
+                        mips.addInst(String.format("subu %s, %s, %s", destReg, leftReg, tempReg));
+
+                        optimized = true;
+                    }
+                }
+            }
+        }
+
+        //  I-Type 指令优化
+        // 如果没有被 Mul/Div 优化处理过，且右操作数是常数
+        if (!optimized && instr.getRight() instanceof IrConstInt) {
+            int val = ((IrConstInt) instr.getRight()).getValue();
+
+            // 检查是否在 16 位有符号整数范围内 (-32768 ~ 32767)
+            boolean is16Bit = (val >= -32768 && val <= 32767);
+            boolean is16BitUnsigned = (val >= 0 && val <= 65535);
+
+            switch (instr.getOp()) {
+                case "ADD":
+                    if (is16Bit) {
+                        mips.addInst(String.format("addiu %s, %s, %d", destReg, leftReg, val));
+                        optimized = true;
+                    }
+                    break;
+                case "SUB":
+                    // x - C <=> x + (-C)
+                    if (val >= -32767 && val <= 32768) { // 取反后要在 range 内
+                        mips.addInst(String.format("addiu %s, %s, %d", destReg, leftReg, -val));
+                        optimized = true;
+                    }
+                    break;
+                case "AND":
+                    if (is16BitUnsigned) {
+                        mips.addInst(String.format("andi %s, %s, %d", destReg, leftReg, val));
+                        optimized = true;
+                    }
+                    break;
+                case "OR":
+                    if (is16BitUnsigned) {
+                        mips.addInst(String.format("ori %s, %s, %d", destReg, leftReg, val));
+                        optimized = true;
+                    }
+                    break;
+                case "XOR":
+                    if (is16BitUnsigned) {
+                        mips.addInst(String.format("xori %s, %s, %d", destReg, leftReg, val));
+                        optimized = true;
+                    }
+                    break;
             }
         }
 
         // 4. 标准硬件指令
         if (!optimized) {
+            String rightReg = getOpReg(instr.getRight(), "$t1");
             switch (instr.getOp()) {
                 case "ADD":
                     mips.addInst(String.format("addu %s, %s, %s", destReg, leftReg, rightReg));
