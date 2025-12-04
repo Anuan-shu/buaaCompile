@@ -14,6 +14,13 @@ public class JumpInstr extends Instruction {
         this.AddUseValue(targetBlock);
     }
 
+    public JumpInstr(IrBasicBlock targetBlock, IrBasicBlock currentBlock) {
+        super(ValueType.JUMP_INST, IrType.VOID, "jump", InstructionType.JUMP);
+        this.targetBlock = targetBlock;
+        this.AddUseValue(targetBlock);
+        currentBlock.addInstruction(this);
+    }
+
     public IrBasicBlock getTargetBlock() {
         return targetBlock;
     }
@@ -27,5 +34,10 @@ public class JumpInstr extends Instruction {
         if (this.targetBlock == oldVal) {
             this.targetBlock = (IrBasicBlock) newVal;
         }
+    }
+
+    public void setTargetBlock(IrBasicBlock clonedBlock) {
+        this.targetBlock = clonedBlock;
+        this.getUseValues().set(0, clonedBlock);
     }
 }

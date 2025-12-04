@@ -41,4 +41,11 @@ public class BranchInstr extends Instruction {
         }
     }
 
+    public void setTrueBlock(IrBasicBlock clonedBlock) {
+        this.getUseValues().set(1, clonedBlock);
+    }
+
+    public void setFalseBlock(IrBasicBlock clonedBlock) {
+        this.getUseValues().set(2, clonedBlock);
+    }
 }

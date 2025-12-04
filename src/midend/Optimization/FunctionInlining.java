@@ -17,7 +17,7 @@ import static midend.LLVM.IrBuilder.GetLocalVarName;
 
 public class FunctionInlining {
     // 内联阈值：指令数少于该值的函数才会被内联
-    private static final int INLINE_THRESHOLD = 300;
+    private static final int INLINE_THRESHOLD = 800;
 
     private static int inlineCount = 0;
 

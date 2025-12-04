@@ -65,12 +65,15 @@ public class Visitor {
         VisitorMainFuncDef.LLVMVisitMainFuncDef(comUnit.GetMainFuncDef());
 
         if (optimize) {
+            // 1. 函数内联
             FunctionInlining functionInlining = new FunctionInlining();
             functionInlining.run(IrBuilder.getIrModule());
 
+            // 2. 清理内联产生的冗余块
             BlockMerge blockMerge = new BlockMerge();
             blockMerge.run(IrBuilder.getIrModule());
 
+            // 3. Mem2Reg
             Mem2Reg mem2Reg = new Mem2Reg();
             mem2Reg.run(IrBuilder.getIrModule());
 
@@ -80,8 +83,13 @@ public class Visitor {
 
             GlobalValueNumbering GlobalValueNumbering = new GlobalValueNumbering();
             GlobalValueNumbering.run(IrBuilder.getIrModule()); // 先去重
+
+            LICM licm = new LICM();
+            licm.run(IrBuilder.getIrModule());                 // 循环外提
+
             GlobalCodeMotion globalCodeMotion = new GlobalCodeMotion();
-            globalCodeMotion.run(IrBuilder.getIrModule());     // 再移动 (包含 Loop 外提)
+            globalCodeMotion.run(IrBuilder.getIrModule());     // 再移动
+            
             // 再次 DCE 清理 GVN 产生的死代码
             dce.run(IrBuilder.getIrModule());
 

@@ -22,6 +22,10 @@ public class ZextInstr extends Instruction {
         return this.getUseValues().get(i);
     }
 
+    public IrType getTargetType() {
+        return this.targetType;
+    }
+
     @Override
     public void replaceUse(IrValue oldVal, IrValue newVal) {
         if (this.getUseValues().get(0) == oldVal) {
