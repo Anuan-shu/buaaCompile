@@ -40,7 +40,7 @@ public class PhiInstr extends Instruction {
     public void addIncoming(IrValue value, IrBasicBlock block) {
         this.values.add(value);
         this.blocks.add(block);
-        // 记得维护 Use 关系，这里简化省略
+        // 维护 Use 关系
     }
 
     public ArrayList<IrValue> getIncomingValues() {

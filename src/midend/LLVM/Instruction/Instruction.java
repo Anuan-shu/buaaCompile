@@ -8,6 +8,8 @@ import midend.LLVM.value.IrFunction;
 import midend.LLVM.value.IrValue;
 import midend.SSA.PhiInstr;
 
+import java.util.ArrayList;
+
 public class Instruction extends IrUser {
     private final InstructionType instrType;
     private IrBasicBlock inBasicBlock;
@@ -77,5 +79,9 @@ public class Instruction extends IrUser {
 
     public boolean isTerminator() {
         return this instanceof BranchInstr || this instanceof JumpInstr || this instanceof ReturnInstr;
+    }
+
+    public ArrayList<IrValue> getUsers() {
+        return this.getUseValues();
     }
 }

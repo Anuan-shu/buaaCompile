@@ -89,7 +89,10 @@ public class Visitor {
 
             GlobalCodeMotion globalCodeMotion = new GlobalCodeMotion();
             globalCodeMotion.run(IrBuilder.getIrModule());     // 再移动
-            
+
+            SimpleLoopUnroll simpleLoopUnroll = new SimpleLoopUnroll();
+            simpleLoopUnroll.run(IrBuilder.getIrModule());     // 循环展开
+
             // 再次 DCE 清理 GVN 产生的死代码
             dce.run(IrBuilder.getIrModule());
 
@@ -97,6 +100,7 @@ public class Visitor {
 
             SimpleConstProp simpleConstProp = new SimpleConstProp();
             simpleConstProp.run(IrBuilder.getIrModule());
+            dce.run(IrBuilder.getIrModule());
         }
     }
 

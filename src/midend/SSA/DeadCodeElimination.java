@@ -89,7 +89,7 @@ public class DeadCodeElimination {
      * 辅助方法：获取一条指令用到的所有操作数
      *
      */
-    public List<IrValue> getOperands(Instruction instr) {
+    public static List<IrValue> getOperands(Instruction instr) {
         List<IrValue> ops = new ArrayList<>();
 
         if (instr instanceof AluInst) {

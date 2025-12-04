@@ -5,6 +5,7 @@ import midend.LLVM.Type.IrType;
 import midend.LLVM.ValueType;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 public class IrBasicBlock extends IrValue {
@@ -105,5 +106,37 @@ public class IrBasicBlock extends IrValue {
     public void addInstructionFirst(Instruction instr) {
         this.instructions.add(0, instr);
         instr.setParentBasicBlock(this);
+    }
+
+    /**
+     * 移除某个前驱块，并更新本块中 Phi 指令的 incoming 列表
+     */
+    public void removePredecessor(IrBasicBlock pred) {
+        // 1. 移除 predecessor 列表中的引用
+        this.predecessors.remove(pred);
+
+        // 2. 遍历本块指令，更新所有 Phi 指令
+        Iterator<Instruction> it = instructions.iterator();
+        while (it.hasNext()) {
+            Instruction inst = it.next();
+            if (inst instanceof midend.SSA.PhiInstr) {
+                midend.SSA.PhiInstr phi = (midend.SSA.PhiInstr) inst;
+
+                // 查找并移除对应的 block 和 value
+                ArrayList<IrBasicBlock> blocks = phi.getIncomingBlocks();
+                ArrayList<midend.LLVM.value.IrValue> values = phi.getIncomingValues();
+
+                for (int i = 0; i < blocks.size(); i++) {
+                    if (blocks.get(i) == pred) {
+                        blocks.remove(i);
+                        values.remove(i);
+                        i--; // 索引回退
+                    }
+                }
+            } else {
+                // Phi 指令一定在块的开头，遇到非 Phi 直接结束
+                break;
+            }
+        }
     }
 }
