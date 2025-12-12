@@ -82,17 +82,12 @@ public class Mem2Reg {
      */
     private Set<IrBasicBlock> getDefBlocks(AllocateInstruction alloca) {
         Set<IrBasicBlock> set = new HashSet<>();
-        // 遍历整个函数寻找使用该 alloca 的 store 指令
-        // 优化：如果你的 IrValue 维护了 useList，可以直接遍历 useList
-
         IrFunction func = (IrFunction) alloca.getParent().getParent(); // 获取所属函数
         for (IrBasicBlock bb : func.getBasicBlocks()) {
             for (Instruction instr : bb.getInstructions()) {
                 if (instr instanceof StoreInstr) {
                     StoreInstr store = (StoreInstr) instr;
-                    // Store 的第二个操作数是指针 (ptr)
-                    // 如果 store 的目标是该 alloca
-                    if (store.getPtr() == alloca || store.getPtr().equals(alloca)) {
+                    if (store.getPtr() == alloca) {
                         set.add(bb);
                     }
                 }
@@ -112,13 +107,9 @@ public class Mem2Reg {
                 // 遍历支配边界
                 for (IrBasicBlock dfBlock : domTree.getDominanceFrontier(block)) {
                     if (!liveSet.contains(dfBlock)) {
-                        // 插入 Phi
-                        // 类型应该是 alloca 指向的类型 (比如 alloca i32 -> phi i32)
                         PhiInstr phi = new PhiInstr(((IrPointer) alloca.irType).targetType, dfBlock);
                         phi.setOriginalAlloca(alloca);
-
                         dfBlock.addInstructionFirst(phi); // 插在块头
-
                         liveSet.add(dfBlock);
                         workList.add(dfBlock);
                     }
@@ -135,7 +126,9 @@ public class Mem2Reg {
             if (instr instanceof PhiInstr) {
                 PhiInstr phi = (PhiInstr) instr;
                 AllocateInstruction alloca = phi.getOriginalAlloca();
-                if (alloca != null) {
+                // 增加 containsKey 检查 ===
+                // 防止访问上一轮 Mem2Reg 删除的 alloca 导致空指针异常
+                if (alloca != null && varStacks.containsKey(alloca)) {
                     varStacks.get(alloca).push(phi);
                     pushCount.merge(alloca, 1, Integer::sum);
                 }
@@ -150,10 +143,7 @@ public class Mem2Reg {
                     AllocateInstruction alloca = (AllocateInstruction) load.getPtr();
                     if (varStacks.containsKey(alloca)) {
                         IrValue currVal = varStacks.get(alloca).peek();
-
-                        // 将 load 的结果替换为 currVal
                         load.replaceAllUsesWith(currVal);
-
                         deadInstructions.add(load); // 标记删除
                     }
                 }
@@ -164,7 +154,6 @@ public class Mem2Reg {
                     if (varStacks.containsKey(alloca)) {
                         varStacks.get(alloca).push(store.getVal());
                         pushCount.merge(alloca, 1, Integer::sum);
-
                         deadInstructions.add(store); // 标记删除
                     }
                 }
@@ -177,6 +166,7 @@ public class Mem2Reg {
                 if (instr instanceof PhiInstr) {
                     PhiInstr phi = (PhiInstr) instr;
                     AllocateInstruction alloca = phi.getOriginalAlloca();
+                    // 同样增加 containsKey 检查
                     if (alloca != null && varStacks.containsKey(alloca) && !varStacks.get(alloca).isEmpty()) {
                         phi.addIncoming(varStacks.get(alloca).peek(), bb);
                     }
@@ -197,18 +187,10 @@ public class Mem2Reg {
         }
     }
 
-    /**
-     * 物理删除所有被标记的指令
-     */
     private void removePromotedInstructions(IrFunction func) {
-        // 先删除 deadInstructions 中的 load/store
         for (IrBasicBlock bb : func.getBasicBlocks()) {
-            // 使用 removeIf 安全删除
             bb.getInstructions().removeIf(instr -> deadInstructions.contains(instr));
         }
-
-        // 再删除所有被提升的 alloca (因为它们已经变成寄存器了)
-        // 遍历 varStacks 的 keySet 即可知道哪些 alloca 被提升了
         for (IrBasicBlock bb : func.getBasicBlocks()) {
             bb.getInstructions().removeIf(instr -> instr instanceof AllocateInstruction && varStacks.containsKey(instr));
         }

@@ -8,19 +8,30 @@ public class MipsOptimizer {
     // 入口方法
     public static List<String> optimize(List<String> sourceCode) {
         List<String> optimized = new ArrayList<>(sourceCode);
+        boolean changed = true;
+        int maxPasses = 100;
+        int pass = 0;
+        while (changed && pass < maxPasses) {
+            int oldSize = optimized.size();
+            List<String> current = new ArrayList<>(optimized);
 
-        // 1. 先进行算术和Move优化，减少干扰
-        optimized = removeRedundantMoves(optimized);
-        optimized = simplifyAlgebra(optimized);
+            // 1. 先进行算术和Move优化，减少干扰
+            current = removeRedundantMoves(current);
+            current = simplifyAlgebra(current);
 
-        // 2. 内存优化
-        for (int i = 0; i < 4; i++) {
-            optimized = removeRedundantLoad(optimized);
+            // 2. 内存优化
+            for (int i = 0; i < 4; i++) {
+                current = removeRedundantLoad(current);
+            }
+
+            // 3. 分支优化
+            current = optimizeBranches(current);
+            current = removeRedundantJumps(current);
+
+            optimized = current;
+            changed = optimized.size() != oldSize;
+            pass++;
         }
-
-        // 3. 分支优化
-        optimized = optimizeBranches(optimized);
-        optimized = removeRedundantJumps(optimized);
 
         return optimized;
     }

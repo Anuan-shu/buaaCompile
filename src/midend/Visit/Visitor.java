@@ -65,42 +65,59 @@ public class Visitor {
         VisitorMainFuncDef.LLVMVisitMainFuncDef(comUnit.GetMainFuncDef());
 
         if (optimize) {
-            // 1. 函数内联
+            // 1. 基础优化
             FunctionInlining functionInlining = new FunctionInlining();
             functionInlining.run(IrBuilder.getIrModule());
 
-            // 2. 清理内联产生的冗余块
             BlockMerge blockMerge = new BlockMerge();
             blockMerge.run(IrBuilder.getIrModule());
 
-            // 3. Mem2Reg
+            // 先清理掉不可达块，防止 Mem2Reg 处理它们
+            RemoveUnreachableBlocks removeUnreachable = new RemoveUnreachableBlocks();
+            removeUnreachable.run(IrBuilder.getIrModule());
+
+            // 2. 全局变量局部化
+            GlobalVariableLocalization globalLoc = new GlobalVariableLocalization();
+            globalLoc.run(IrBuilder.getIrModule());
+
+            // 3. 第一轮 Mem2Reg (处理普通的局部变量)
             Mem2Reg mem2Reg = new Mem2Reg();
             mem2Reg.run(IrBuilder.getIrModule());
 
-            //死代码消除
+            // 中间清理
+            GlobalValueNumbering gvn = new GlobalValueNumbering();
+            gvn.run(IrBuilder.getIrModule());
+
             DeadCodeElimination dce = new DeadCodeElimination();
             dce.run(IrBuilder.getIrModule());
 
-            GlobalValueNumbering GlobalValueNumbering = new GlobalValueNumbering();
-            GlobalValueNumbering.run(IrBuilder.getIrModule()); // 先去重
+            // 4. 循环展开
+            SimpleLoopUnroll loopUnroll = new SimpleLoopUnroll();
+            loopUnroll.run(IrBuilder.getIrModule());
 
+            // 5. SROA
+            // 数组被拆解为标量
+            SROA sroa = new SROA();
+            sroa.run(IrBuilder.getIrModule());
+
+            // 6. 第二轮 Mem2Reg
+            // 将拆解后的标量提升为寄存器 (Phi)
+            mem2Reg.run(IrBuilder.getIrModule());
+
+            // 7. 后续优化
+            gvn.run(IrBuilder.getIrModule());
             LICM licm = new LICM();
-            licm.run(IrBuilder.getIrModule());                 // 循环外提
+            licm.run(IrBuilder.getIrModule());
+            GlobalCodeMotion gcm = new GlobalCodeMotion();
+            gcm.run(IrBuilder.getIrModule());
 
-            GlobalCodeMotion globalCodeMotion = new GlobalCodeMotion();
-            globalCodeMotion.run(IrBuilder.getIrModule());     // 再移动
+            SimpleConstProp constProp = new SimpleConstProp();
+            constProp.run(IrBuilder.getIrModule());
 
-            SimpleLoopUnroll simpleLoopUnroll = new SimpleLoopUnroll();
-            simpleLoopUnroll.run(IrBuilder.getIrModule());     // 循环展开
-
-            // 再次 DCE 清理 GVN 产生的死代码
             dce.run(IrBuilder.getIrModule());
-
+            // 最后再清理一次，消除优化产生的死块
+            removeUnreachable.run(IrBuilder.getIrModule());
             blockMerge.run(IrBuilder.getIrModule());
-
-            SimpleConstProp simpleConstProp = new SimpleConstProp();
-            simpleConstProp.run(IrBuilder.getIrModule());
-            dce.run(IrBuilder.getIrModule());
         }
     }
 

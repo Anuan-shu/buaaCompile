@@ -746,7 +746,7 @@ mips.addInst("nop");
    1. ```java
       // 为保存寄存器预留空间 ($ra, $fp)
       // $ra @ -4($fp), $fp @ -8($fp)
-      currentFunctionStackSize += 8;
+      currentFunctionStackSize += 8; // 目前只记录，具体指令在后面
       ```
 
    2. ```java
@@ -795,3 +795,176 @@ mips.addInst("nop");
       label = label.replace("@", "").replace(".", "_");
       mips.addInst("\n" + label + ":");
       ```
+
+   2. 先建立栈帧指针，再开栈，最后保存寄存器 
+
+      ```java
+      		// 1. 保存旧的 $fp  到当前栈顶下方的预留位
+              mips.addInst("sw $fp, -8($sp)");
+      
+              // 2. 设置新的 $fp (指向当前栈帧的基址，即 Old SP)
+              mips.addInst("move $fp, $sp");
+      
+              // 3. 分配栈空间 (更新 $sp)
+              if (currentFunctionStackSize > 32767) {
+                  // 如果栈太大，不能用立即数，使用 $t0 中转
+                  mips.addInst("li $t0, -" + currentFunctionStackSize);
+                  mips.addInst("addu $sp, $sp, $t0");
+              } else {
+                  // 栈较小，直接用 addiu
+                  mips.addInst("addiu $sp, $sp, -" + currentFunctionStackSize);
+              }
+      
+              // 4. 保存 $ra
+              // 注意：此时已分配空间，使用 $fp 寻址 (因为 $fp == Old SP)
+              if (!isLeaf) {
+                  mips.addInst("sw $ra, -4($fp)");
+              }
+      
+              // 5. 保存 Callee-Saved 寄存器 ($sX)
+              int extraSaveSize = 0;
+              // 建立一个 map 传给 EmitInstruction，用于函数返回时恢复寄存器
+              Map<Integer, Integer> sRegStackOffsets = new HashMap<>();
+      ```
+
+   3. 保存参数
+
+      1. ```java
+         // 辅助方法：处理大偏移量的 sw
+             private static void saveToStackOrReg(String srcReg, int offset, boolean useFp) {
+                 if (offset >= -32768 && offset <= 32767) {
+                     mips.addInst("sw " + srcReg + ", " + offset + "($fp)");
+                 } else {
+                     mips.addInst("li $at, " + offset);
+                     mips.addInst("addu $at, $fp, $at");
+                     mips.addInst("sw " + srcReg + ", 0($at)");
+                 }
+             }
+         ```
+
+      2. 四个参数以内直接存入栈；
+
+      3. 大于四个参数，先计算参数位置并加载到临时寄存器，之后移入栈；
+
+      ```java
+                  // 检查参数是否被分配到了寄存器
+                  Integer allocatedReg = regAllocation.get(arg);
+                  if (i < 4) {
+                      if (allocatedReg != null) {
+                          // 优化：直接移入分配的寄存器 $sX
+                          mips.addInst("move " + RegisterAllocator.REG_NAMES[allocatedReg] + ", $a" + i);
+                      } else {
+                          // 未分配寄存器：存入栈
+                          saveToStackOrReg("$a" + i, offset, true);
+                      }
+                  } else {
+                      // 1. 计算该参数在 Caller 栈帧中的位置
+                      // 第5个参数在 0(Old $sp)，即 0($fp) 第6个参数在 4($fp)...
+                      int callerOffset = (i - 4) * 4;
+      
+                      // 2. 从 Caller 栈帧加载参数到临时寄存器 $t0
+                      // 注意：这里是正偏移，访问的是 Caller 放置参数的区域
+                      mips.addInst("lw $t0, " + callerOffset + "($fp)");
+      
+                      // 3. 将参数保存到当前函数的局部栈帧
+                      // offset 是 Step 1 分配的负偏移量
+                      // 后续指令访问 %arg 时，统一去 offset($fp) 读取
+                      if (allocatedReg != null) {
+                          mips.addInst("move " + RegisterAllocator.REG_NAMES[allocatedReg] + ", $t0");
+                      } else {
+                          saveToStackOrReg("$t0", offset, true);
+                      }
+                  }
+              }
+      ```
+
+4. 遍历基本块
+
+   1. 函数相关信息传入`EmitInstruction`类，之后调用emit()方法处理基本块中指令；
+
+   2. 遍历函数内基本块，再遍历基本块内指令；
+
+      ```java
+      		for (IrBasicBlock bb : function.getBasicBlocks()) {
+                  String bbLabel = bb.irName.replace("@", "").replace(".", "_");
+                  // 生成块标签 (block_name:)
+                  mips.addInst(label + "_" + bbLabel + ":");
+      
+                  for (Instruction instr : bb.getInstructions()) {
+                      // 调用指令翻译器
+                      emitter.emit(instr, optimize, isLeaf);
+                  }
+              }
+      ```
+
+      
+
+#### EmitInstruction类
+
+必要变量：
+
+```java
+private final MipsModule mips;
+private final HashMap<IrValue, Integer> offsetMap; // 记录为IrValue分配的栈空间
+private final String currentFuncLabel;// 当前函数的名字（用于拼接跳转标签）
+private final HashMap<AllocateInstruction, Integer> allocaArrayOffsets; // alloc数组时记录为数组实体分配的空间
+private boolean optimize = false; // 是否开启优化
+private boolean isLeaf = false; // 是否为叶子函数
+private final Map<IrValue, Integer> regAllocation; // 记录为IrValue分配的寄存器
+private final Map<Integer, Integer> sRegStackOffsets; // 用于 epilogue 恢复
+```
+
+##### emit()方法
+
+解析每个指令，并调用对应的方法；
+
+1. **loadToReg(IrValue val, String reg)**：
+
+   1. 检查 `regAllocation`，若变量已在寄存器中，且目标寄存器与源寄存器不同，生成 move；若相同则跳过。
+   2. 常量/全局处理：若为立即数生成 `li`，若为全局变量/字符串生成 `la`。
+   3. 栈加载：若变量在栈上，根据 `offsetMap` 生成` lw`。
+
+2. **saveReg(IrValue dest, String srcReg)**：
+
+   1. 若目标变量分配了寄存器并且目标寄存器与源寄存器不同，生成 move。
+   2. 若目标变量未分配寄存器，生成 sw 写入栈帧。
+
+3. **emitBinary(AluInst instr)**：根据运算符生成对应指令，之后保存结果
+
+   ```java
+   mips.addInst(String.format("addu %s, %s, %s", destReg, leftReg, rightReg));
+   saveReg(instr, destReg);
+   ```
+
+4. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
