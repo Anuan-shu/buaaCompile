@@ -16,8 +16,8 @@ import java.util.Map;
 import static midend.LLVM.IrBuilder.GetLocalVarName;
 
 public class FunctionInlining {
-    // 内联阈值：指令数少于该值的函数才会被内联
-    private static final int INLINE_THRESHOLD = 800;
+    // 内联阈值：指令数少于该值的函数才会被内联（激进优化）
+    private static final int INLINE_THRESHOLD = 2000;
 
     private static int inlineCount = 0;
 

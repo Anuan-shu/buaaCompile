@@ -12,17 +12,17 @@ import java.util.*;
 
 public class RegisterAllocator {
     public static final String[] REG_NAMES = {
-            // Caller-Saved (临时寄存器)
+            // Caller-Saved (临时寄存器) - $t0-$t2 保留给 EmitInstruction 使用
             "$t3", "$t4", "$t5", "$t6", "$t7", "$t8", "$t9",
-            // Callee-Saved (保存寄存器) - 对应索引 10 ~ 17
+            // Callee-Saved (保存寄存器)
             "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
-            // 特殊寄存器 (v1 通常可用作临时)
+            // 特殊寄存器
             "$v1"
     };
     private static final int MAX_REGISTERS = REG_NAMES.length;
 
     // 定义哪些索引是 Callee-Saved ($s0-$s7)
-    // 根据上面的数组，下标 10 到 17 是 $s 寄存器
+    // 根据上面的数组，下标 7 到 14 是 $s 寄存器
     public static final int CALLEE_SAVED_START = 7;
     public static final int CALLEE_SAVED_END = 14;
 

@@ -72,19 +72,27 @@ public class Visitor {
             BlockMerge blockMerge = new BlockMerge();
             blockMerge.run(IrBuilder.getIrModule());
 
-            // 2. 全局变量局部化
-            GlobalVariableLocalization globalLoc = new GlobalVariableLocalization();
-            globalLoc.run(IrBuilder.getIrModule());
-
-            // 3. 第一轮 Mem2Reg
+            // 2. 第一轮 Mem2Reg - 将 alloca/load/store 转换为 SSA
             Mem2Reg mem2Reg = new Mem2Reg();
             mem2Reg.run(IrBuilder.getIrModule());
 
-            // 4. 清理 (为循环展开做准备)
+            // 3. 清理
             DeadCodeElimination dce = new DeadCodeElimination();
             dce.run(IrBuilder.getIrModule());
+
+            // 4. 编译时常量函数求值 (必须在 Mem2Reg 之后，否则会有 store 指令)
+            ConstFunctionEval constFuncEval = new ConstFunctionEval();
+            constFuncEval.run(IrBuilder.getIrModule());
+
+            // 4.1 常量传播和GVN
             GlobalValueNumbering gvn = new GlobalValueNumbering();
             gvn.run(IrBuilder.getIrModule());
+            SimpleConstProp simpleConstProp = new SimpleConstProp();
+            simpleConstProp.run(IrBuilder.getIrModule());
+
+            // 4.2 再次尝试常量函数求值 (处理 fib(fib(5)+2) 这样的情况)
+            constFuncEval.run(IrBuilder.getIrModule());
+            simpleConstProp.run(IrBuilder.getIrModule());
 
             // 5. 循环展开 (可能产生死代码)
             SimpleLoopUnroll simpleLoopUnroll = new SimpleLoopUnroll();
@@ -109,7 +117,6 @@ public class Visitor {
             GlobalCodeMotion globalCodeMotion = new GlobalCodeMotion();
             globalCodeMotion.run(IrBuilder.getIrModule());
 
-            SimpleConstProp simpleConstProp = new SimpleConstProp();
             simpleConstProp.run(IrBuilder.getIrModule());
 
             // 最终清理

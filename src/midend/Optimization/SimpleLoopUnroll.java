@@ -17,9 +17,9 @@ import java.util.List;
 
 public class SimpleLoopUnroll {
 
-    // 阈值设置
-    private static final int MAX_TRIP_COUNT = 128;
-    private static final int MAX_INSTRUCTIONS_THRESHOLD = 800;
+    // 阈值设置 - 激进优化以减少跳转
+    private static final int MAX_TRIP_COUNT = 512;
+    private static final int MAX_INSTRUCTIONS_THRESHOLD = 4000;
 
     public void run(IrModule module) {
         boolean changed = true;

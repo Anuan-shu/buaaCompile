@@ -224,20 +224,77 @@ public class EmitInstruction {
                 mips.addInst("addu " + tmp + ", " + tmp + ", " + srcReg);
                 mips.addInst("sll " + dstReg + ", " + tmp + ", 1");
                 return true;
+            case 7: // x*7 = (x<<3) - x
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 3");
+                mips.addInst("subu " + dstReg + ", " + tmp + ", " + srcReg);
+                return true;
             case 9: // x*9 = (x<<3) + x
                 mips.addInst("sll " + tmp + ", " + srcReg + ", 3");
                 mips.addInst("addu " + dstReg + ", " + tmp + ", " + srcReg);
                 return true;
-            case 10: // x*10 = (x<<3) + (x<<1)
-                mips.addInst("sll " + tmp + ", " + srcReg + ", 3");
-                mips.addInst("sll " + dstReg + ", " + srcReg + ", 1"); // dstReg 用作临时
-                mips.addInst("addu " + dstReg + ", " + tmp + ", " + dstReg);
+            case 10: // x*10 = (x<<3) + (x<<1) - 需要确保不覆盖 srcReg
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 1");
+                mips.addInst("sll " + dstReg + ", " + srcReg + ", 3");
+                mips.addInst("addu " + dstReg + ", " + dstReg + ", " + tmp);
                 return true;
-            case 12: // x*12 = (x<<2) * 3 = ((x<<2)<<1) + (x<<2)
-                // 也可以 x*12 = x*3 << 2
+            case 12: // x*12 = x*3 << 2
                 mips.addInst("sll " + tmp + ", " + srcReg + ", 1");
                 mips.addInst("addu " + tmp + ", " + tmp + ", " + srcReg);
                 mips.addInst("sll " + dstReg + ", " + tmp + ", 2");
+                return true;
+            case 15: // x*15 = (x<<4) - x
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 4");
+                mips.addInst("subu " + dstReg + ", " + tmp + ", " + srcReg);
+                return true;
+            case 17: // x*17 = (x<<4) + x
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 4");
+                mips.addInst("addu " + dstReg + ", " + tmp + ", " + srcReg);
+                return true;
+            case 18: // x*18 = x*9 << 1
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 3");
+                mips.addInst("addu " + tmp + ", " + tmp + ", " + srcReg);
+                mips.addInst("sll " + dstReg + ", " + tmp + ", 1");
+                return true;
+            case 20: // x*20 = x*5 << 2
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 2");
+                mips.addInst("addu " + tmp + ", " + tmp + ", " + srcReg);
+                mips.addInst("sll " + dstReg + ", " + tmp + ", 2");
+                return true;
+            case 24: // x*24 = x*3 << 3
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 1");
+                mips.addInst("addu " + tmp + ", " + tmp + ", " + srcReg);
+                mips.addInst("sll " + dstReg + ", " + tmp + ", 3");
+                return true;
+            case 31: // x*31 = (x<<5) - x
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 5");
+                mips.addInst("subu " + dstReg + ", " + tmp + ", " + srcReg);
+                return true;
+            case 33: // x*33 = (x<<5) + x
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 5");
+                mips.addInst("addu " + dstReg + ", " + tmp + ", " + srcReg);
+                return true;
+            case 36: // x*36 = x*9 << 2
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 3");
+                mips.addInst("addu " + tmp + ", " + tmp + ", " + srcReg);
+                mips.addInst("sll " + dstReg + ", " + tmp + ", 2");
+                return true;
+            case 40: // x*40 = x*5 << 3
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 2");
+                mips.addInst("addu " + tmp + ", " + tmp + ", " + srcReg);
+                mips.addInst("sll " + dstReg + ", " + tmp + ", 3");
+                return true;
+            case 48: // x*48 = x*3 << 4
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 1");
+                mips.addInst("addu " + tmp + ", " + tmp + ", " + srcReg);
+                mips.addInst("sll " + dstReg + ", " + tmp + ", 4");
+                return true;
+            case 63: // x*63 = (x<<6) - x
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 6");
+                mips.addInst("subu " + dstReg + ", " + tmp + ", " + srcReg);
+                return true;
+            case 65: // x*65 = (x<<6) + x
+                mips.addInst("sll " + tmp + ", " + srcReg + ", 6");
+                mips.addInst("addu " + dstReg + ", " + tmp + ", " + srcReg);
                 return true;
             // 其他大数直接返回 false，走 mul 指令
         }
@@ -295,6 +352,7 @@ public class EmitInstruction {
 
             // 查表 (M: Magic, S: Shift)
             // 验证来源: Hacker's Delight / LLVM output
+            // 只保留经过验证的常数
             switch (c) {
                 case 3:
                     magic = 0x55555556L;
@@ -312,8 +370,32 @@ public class EmitInstruction {
                     magic = 0x66666667L;
                     shift = 2;
                     break;
+                case 12:
+                    magic = 0x2AAAAAABL;
+                    shift = 1;
+                    break;
+                case 20:
+                    magic = 0x66666667L;
+                    shift = 3;
+                    break;
+                case 24:
+                    magic = 0x2AAAAAABL;
+                    shift = 2;
+                    break;
+                case 40:
+                    magic = 0x66666667L;
+                    shift = 4;
+                    break;
+                case 48:
+                    magic = 0x2AAAAAABL;
+                    shift = 3;
+                    break;
+                case 100:
+                    magic = 0x51EB851FL;
+                    shift = 5;
+                    break;
                 default:
-                    return false; // 其他数回退到 div 指令
+                    return false;
             }
 
             // 生成代码序列
