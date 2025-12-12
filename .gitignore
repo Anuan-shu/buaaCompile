@@ -31,3 +31,4 @@ llvm_ir.txt
 mips.txt
 output.txt
 parser.txt
+qodana.yaml
