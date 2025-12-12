@@ -72,10 +72,6 @@ public class Visitor {
             BlockMerge blockMerge = new BlockMerge();
             blockMerge.run(IrBuilder.getIrModule());
 
-            // 2. 全局变量局部化
-            GlobalVariableLocalization globalLoc = new GlobalVariableLocalization();
-            globalLoc.run(IrBuilder.getIrModule());
-
             // 3. 第一轮 Mem2Reg
             Mem2Reg mem2Reg = new Mem2Reg();
             mem2Reg.run(IrBuilder.getIrModule());
