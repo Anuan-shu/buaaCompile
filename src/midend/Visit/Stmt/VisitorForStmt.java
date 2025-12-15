@@ -65,7 +65,6 @@ public class VisitorForStmt {
             IrBuilder.GetNewJumpInstr(stepBlock);
         }
 
-
         // 4. 处理步进部分
         IrBuilder.SetCurrentBasicBlock(stepBlock);
         ForStmt forStepStmt = stmt.GetForStepStmt();

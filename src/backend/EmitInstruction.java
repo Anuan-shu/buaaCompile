@@ -776,9 +776,6 @@ public class EmitInstruction {
     // 9. Zext (零扩展) i1 -> i32
     private void emitZext(ZextInstr instr) {
         loadToReg(instr.getOperand(0), "$t0");
-        // i1 在实现里已经是 0/1 的整数，所以 zext 就是 move
-        // 为了保险，做个与操作
-        mips.addInst("andi $t0, $t0, 1");
         saveReg(instr, "$t0");
     }
 

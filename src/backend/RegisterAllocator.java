@@ -236,9 +236,6 @@ public class RegisterAllocator {
                 allocation.put(node, colorFound);
             } else {
                 // Spill 发生
-                // 注意：如果 isCrossCall 为真，且 $s 用光了，即使 $t 还有空位也必须 Spill，
-                // 除非你在 Codegen 阶段对这个变量做了特殊的 Caller-Save 处理。
-                // 既然没做，这里就只能 Spill。
             }
         }
     }

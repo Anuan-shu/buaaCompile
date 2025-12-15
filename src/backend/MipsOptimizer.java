@@ -18,15 +18,18 @@ public class MipsOptimizer {
             // 1. 先进行算术和Move优化，减少干扰
             current = removeRedundantMoves(current);
             current = simplifyAlgebra(current);
+            current = simplifyLi(current);
 
             // 2. 内存优化
             for (int i = 0; i < 4; i++) {
                 current = removeRedundantLoad(current);
             }
-
+            current = removeRedundantStore(current);
             // 3. 分支优化
             current = optimizeBranches(current);
             current = removeRedundantJumps(current);
+            // 4. 移除多余的nop
+            current = removeExtraNops(current);
 
             optimized = current;
             changed = optimized.size() != oldSize;
@@ -287,6 +290,7 @@ public class MipsOptimizer {
             String[] parts = trimmed.split("[\\s,]+");
 
             boolean skip = false;
+            String replacement = null;
 
             if (parts.length >= 3) {
                 String op = parts[0];
@@ -294,24 +298,134 @@ public class MipsOptimizer {
                 String rs = parts[2];
                 String rt = (parts.length > 3) ? parts[3] : "";
 
-                // addu $t0, $t0, 0
-                if ((op.equals("addu") || op.equals("add") || op.equals("subu") || op.equals("sub"))
+                // addu/add/subu/sub $t0, $t1, 0 -> move $t0, $t1 or skip if same
+                if ((op.equals("addu") || op.equals("add") || op.equals("addi") || op.equals("addiu") ||
+                        op.equals("subu") || op.equals("sub"))
                         && rt.equals("0")) {
+                    if (rd.equals(rs)) {
+                        skip = true; // add $t0, $t0, 0 -> nop (remove)
+                    } else {
+                        replacement = "\tmove " + rd + ", " + rs + " # [opt] simplified add 0";
+                    }
+                }
+                // mul $t0, $rs, 1 -> move $t0, $rs
+                else if (op.equals("mul") && rt.equals("1")) {
                     if (rd.equals(rs)) {
                         skip = true;
                     } else {
-                        // add $t0, $t1, 0 -> move $t0, $t1
-                        result.add("\tmove " + rd + ", " + rs + " # [opt] simplified add 0");
-                        skip = true;
+                        replacement = "\tmove " + rd + ", " + rs + " # [opt] mul 1";
                     }
                 }
-                // mul $t0, $t1, 1 -> move $t0, $t1
+                // mul $t0, $rs, 0 -> move $t0, $zero
+                else if (op.equals("mul") && rt.equals("0")) {
+                    replacement = "\tmove " + rd + ", $zero # [opt] mul 0";
+                }
                 // sub $t0, $t1, $t1 -> move $t0, $zero
+                else if ((op.equals("sub") || op.equals("subu")) && rs.equals(rt)) {
+                    replacement = "\tmove " + rd + ", $zero # [opt] sub same";
+                }
+                // sll/srl $t0, $t1, 0 -> move $t0, $t1 or skip
+                else if ((op.equals("sll") || op.equals("srl") || op.equals("sra")) && rt.equals("0")) {
+                    if (rd.equals(rs)) {
+                        skip = true;
+                    } else {
+                        replacement = "\tmove " + rd + ", " + rs + " # [opt] shift 0";
+                    }
+                }
             }
 
-            if (!skip) {
+            if (skip) {
+                result.add("# [opt] removed: " + trimmed);
+            } else if (replacement != null) {
+                result.add(replacement);
+            } else {
                 result.add(line);
             }
+        }
+        return result;
+    }
+
+    /**
+     * 优化：移除不必要的nop和重复nop
+     */
+    private static List<String> removeExtraNops(List<String> lines) {
+        List<String> result = new ArrayList<>();
+        boolean lastWasNop = false;
+        boolean lastWasLabel = false;
+
+        for (int i = 0; i < lines.size(); i++) {
+            String trimmed = lines.get(i).trim();
+
+            // 检查是否是 nop
+            if (trimmed.equals("nop")) {
+                // 如果上一行也是 nop，跳过这一行
+                if (lastWasNop) {
+                    result.add("# [opt] removed extra nop");
+                    continue;
+                }
+                // 如果上一行是 label (不是跳转指令后面)，可能不需要 nop
+                // 但是分支/跳转后的第一个 nop 是需要的（delay slot）
+                lastWasNop = true;
+                result.add(lines.get(i));
+            } else {
+                lastWasNop = false;
+                result.add(lines.get(i));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 优化：简化 li 指令
+     * li $t0, 0 -> move $t0, $zero
+     */
+    private static List<String> simplifyLi(List<String> lines) {
+        List<String> result = new ArrayList<>();
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("li ")) {
+                String[] parts = trimmed.split("[\\s,]+");
+                if (parts.length == 3 && parts[2].equals("0")) {
+                    // li $t0, 0 -> move $t0, $zero
+                    result.add("\tmove " + parts[1] + ", $zero");
+                    continue;
+                }
+            }
+            result.add(line);
+        }
+        return result;
+    }
+
+    /**
+     * 优化：消除冗余的 Store 指令
+     * 只删除严格连续的两个 sw 写同一地址的情况
+     * sw $t0, addr
+     * sw $t1, addr <- 上一个 sw 是死代码
+     */
+    private static List<String> removeRedundantStore(List<String> lines) {
+        List<String> result = new ArrayList<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String trimmed = lines.get(i).trim();
+            String[] parts = trimmed.split("[\\s,]+");
+
+            // 检查是否是 sw 指令
+            if (parts.length >= 3 && parts[0].equals("sw") && parts[2].contains("($")) {
+                String addr = parts[2];
+
+                // 检查下一条是否也是写同一地址的 sw
+                if (i + 1 < lines.size()) {
+                    String nextTrimmed = lines.get(i + 1).trim();
+                    String[] nextParts = nextTrimmed.split("[\\s,]+");
+
+                    if (nextParts.length >= 3 && nextParts[0].equals("sw") &&
+                            nextParts[2].equals(addr)) {
+                        // 当前 sw 是死代码，跳过不添加
+                        continue;
+                    }
+                }
+            }
+            result.add(lines.get(i));
         }
         return result;
     }

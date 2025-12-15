@@ -102,7 +102,8 @@ public class Compiler {
                         break;
                     }
                     for (Symbol symbol : currentTable.GetSymbolList()) {
-                        writer.write(dep + " " + symbol.GetSymbolName() + " " + symbol.GetSymbolType().getTypeName() + "\n");
+                        writer.write(dep + " " + symbol.GetSymbolName() + " "
+                                + symbol.GetSymbolType().getTypeName() + "\n");
                         //System.out.println(dep+" "+symbol.GetSymbolName()+" "+ symbol.GetSymbolType().getTypeName());
                     }
                     currentTable.setWrite(true);

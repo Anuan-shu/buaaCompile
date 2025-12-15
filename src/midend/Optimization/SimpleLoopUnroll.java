@@ -86,7 +86,10 @@ public class SimpleLoopUnroll {
         } else if (bodyTerm instanceof JumpInstr) {
             if (((JumpInstr) bodyTerm).getTargetBlock() == header) bodyJumpsBack = true;
         }
-        if (!bodyJumpsBack) return null;
+        if (!bodyJumpsBack) {
+            // System.err.println("[Unroll] " + header.irName + ": body doesn't jump back");
+            return null;
+        }
 
         List<PhiInstr> phis = new ArrayList<>();
         for (Instruction i : header.getInstructions()) {

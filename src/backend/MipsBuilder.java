@@ -150,7 +150,7 @@ public class MipsBuilder {
 
         // 先建立栈帧指针，再开栈，最后保存寄存器
 
-        // 1. 保存旧的 $fp  到当前栈顶下方的预留位
+        // 1. 保存旧的 $fp 到当前栈顶下方的预留位
         mips.addInst("sw $fp, -8($sp)");
 
         // 2. 设置新的 $fp (指向当前栈帧的基址，即 Old SP)

@@ -30,12 +30,15 @@ public class Visitor {
     }
 
     public void Visit() {
-        //添加库函数定义
-        OutSymbolTable.addSymbol(new Symbol("getint", SymbolType.VOID_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "@getint")));
+        // 添加库函数定义
+        OutSymbolTable.addSymbol(new Symbol("getint", SymbolType.VOID_FUNC, 0,
+                new IrFunction(ValueType.FUNCTION, IrType.INT32, "@getint")));
 
-        OutSymbolTable.addSymbol(new Symbol("main", SymbolType.INT_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "main")));
+        OutSymbolTable.addSymbol(
+                new Symbol("main", SymbolType.INT_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.INT32, "main")));
 
-        OutSymbolTable.addSymbol(new Symbol("printf", SymbolType.VOID_FUNC, 0, new IrFunction(ValueType.FUNCTION, IrType.VOID, "printf")));
+        OutSymbolTable.addSymbol(new Symbol("printf", SymbolType.VOID_FUNC, 0,
+                new IrFunction(ValueType.FUNCTION, IrType.VOID, "printf")));
 
         // 遍历所有声明
         for (Decl decl : comUnit.GetDecls()) {
@@ -51,7 +54,7 @@ public class Visitor {
 
     public void llvmVisit(boolean optimize) {
         this.optimize = optimize;
-        //符号表初始化
+        // 符号表初始化
         GlobalSymbolTable.setLocalSymbolTable(GlobalSymbolTable.getGlobalSymbolTable());
         // 遍历所有声明
         for (Decl decl : comUnit.GetDecls()) {
@@ -123,6 +126,10 @@ public class Visitor {
             dce.run(IrBuilder.getIrModule());
             removeUnreachable.run(IrBuilder.getIrModule());
             blockMerge.run(IrBuilder.getIrModule());
+
+            // 死函数消除 - 删除不再被调用的函数
+            DeadFunctionElimination deadFuncElim = new DeadFunctionElimination();
+            deadFuncElim.run(IrBuilder.getIrModule());
         }
     }
 

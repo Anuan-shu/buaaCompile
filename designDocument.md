@@ -914,9 +914,7 @@ private final Map<IrValue, Integer> regAllocation; // 记录为IrValue分配的�
 private final Map<Integer, Integer> sRegStackOffsets; // 用于 epilogue 恢复
 ```
 
-##### emit()方法
-
-解析每个指令，并调用对应的方法；
+`emit()`方法：解析每个指令，并调用解析对应指令的方法；
 
 1. **loadToReg(IrValue val, String reg)**：
 
@@ -936,9 +934,127 @@ private final Map<Integer, Integer> sRegStackOffsets; // 用于 epilogue 恢复
    saveReg(instr, destReg);
    ```
 
-4. 
+4. **emitLoad(LoadInstr instr)**：调用`loadToReg()`
 
+   ```java
+   mips.addInst("lw $t0, 0($t1)"); // 从地址 $t1 处读取真实的值
+   saveReg(instr, "$t0");          // 把值存入 %val 的栈槽
+   ```
 
+5. **emitStore(StoreInstr instr)**：
+
+   ```java
+   loadToReg(val, "$t0"); // 加载要存储的数据
+   loadToReg(ptr, "$t1"); // 加载目标地址
+   mips.addInst("sw $t0, 0($t1)"); // 写入内存
+   ```
+
+6. **emitIcmp(CmpInstr instr)**：与`emitBinary()`同理，先加载操作数，然后根据运算符生成指令，最后保存结果；
+
+7. **emitBr(BranchInstr instr)**：只处理条件跳转的情况，获取`currentBlock`、`trueBlock`、`falseBlock`三个基本块的名字，之后对不同情况生成跳转；
+
+   ```java
+   // 如果 $t0 == 0 (即不满足条件)，跳过 j trueLabel指令
+   mips.addInst("beqz $t0, " + skipLabel);
+   mips.addInst("nop");
+   // 处理 True 块的 Phi
+   resolvePhiCopies(trueBlock, currentBlock);
+   // 只有满足条件才执行这个长跳转
+   mips.addInst("j " + trueLabel);
+   mips.addInst("nop");
+   mips.addInst(skipLabel + ":");
+   // 处理 False 块的 Phi
+   resolvePhiCopies(falseBlock, currentBlock);
+   // 否则跳转 falseLabel
+   mips.addInst("j " + falseLabel);
+   mips.addInst("nop");
+   ```
+
+8. **emitJump(JumpInstr instr)**：获取基本块名，处理Phi指令，生成跳转；
+
+9. **emitCall(CallInstr instr)**：首先获取形参，进行栈对齐；之后生成移动栈指针的指令
+
+   ```java
+   if (stackArgs > 0) mips.addInst("addiu $sp, $sp, -" + (stackArgs * 4));
+   ```
+
+   再将每一个参数存入寄存器，形参个数大于4时依次从栈顶开始存入；
+
+   ```java
+   			if (i < 4) {
+                   loadToReg(arg, "$a" + i);
+               } else {
+                   loadToReg(arg, "$t0");
+                   mips.addInst(String.format("sw $t0, %d($sp)", (i - 4) * 4));
+               }
+   ```
+
+   生成`jal`指令调用函数，恢复栈指针，如果函数有返回值则保存；
+
+   ```java
+   mips.addInst("jal " + funcName);
+   mips.addInst("nop");
+   if (stackArgs > 0) mips.addInst("addiu $sp, $sp, " + (stackArgs * 4));
+   if (!instr.irType.isVoid()) saveReg(instr, "$v0");
+   ```
+
+10. **emitRet(ReturnInstr instr)**：
+
+    1. 若返回值非 `void`，将返回值加载到 `$v0`；
+    2. 若是 `main` 函数，生成 `li $v0, 10` 和 `syscall` 结束程序；
+    3. 若非 `main` 函数，执行：
+       - 根据 `sRegStackOffsets` 恢复被被调用者保存的寄存器；
+       - 恢复栈指针 `$sp` 和帧指针 `$fp`；
+       - 若非叶子函数，恢复返回地址 `$ra`；
+       - 生成 `jr $ra` 跳转指令。
+
+11. **emitAlloca(AllocateInstruction instr)**：
+
+    1. 从 `allocaArrayOffsets` 获取数组实体在栈上的偏移量；
+    2. 计算数组实体的绝对地址（`$fp + offset`），若偏移量过大则使用 `$at` 寄存器中转；
+    3. 将计算出的绝对地址存入该指针变量对应的栈槽中（即存储“指向数组的指针”）。
+
+12. **emitZext(ZextInstr instr)**：将操作数加载到寄存器，生成`andi $t0, $t0, 1` 确保高位清零，保存结果。
+
+13. **emitGEP(GepInstr instr)**：
+
+    1. 加载基地址（`Base`）和索引（`Index`）到寄存器；
+    2. 计算偏移量：将索引左移 2 位（`sll $t1, $t1, 2`，即乘以 4）；
+    3. 地址相加：`addu $t2, $t0, $t1`；
+    4. 保存计算结果到目标寄存器/栈。
+
+14. **IO指令处理 (PrintInt/PrintStr)**：
+
+    1. **PrintInt**：将待打印值加载到 `$a0`，设置 `$v0` 为 1，执行 `syscall`；
+    2. **PrintStr**：将字符串地址加载到 `$a0`，设置 `$v0` 为 4，执行 `syscall`。
+
+15. **emitTrunc(TruncInstr instr)**：
+
+    1. **i32转换i1**：生成 `andi $t0, $t0, 1` 保留最低位；
+    2. **i32转换成i8**：生成 `andi $t0, $t0, 255` 保留低 8 位；
+    3. 保存截断后的结果。
+
+16. **Phi指令消除 (resolvePhiCopies)**：在跳转指令（`Branch/Jump`）生成前调用；
+
+    1. 遍历目标块中的所有 `Phi` 指令，找到来自当前块的值；
+
+    2. 防止覆盖：利用栈作为临时中转。先将所有需要传递的值压栈；
+
+       ```java
+       loadToReg(values.get(i), "$t0");
+       mips.addInst("addiu $sp, $sp, -4");
+       mips.addInst("sw $t0, 0($sp)");
+       ```
+
+    3. 再按顺序弹栈并保存到 `Phi` 指令对应的目的操作数位置。
+
+       ```java
+       mips.addInst("lw $t0, 0($sp)");
+       mips.addInst("addiu $sp, $sp, 4");
+       saveReg(phi, "$t0");
+       ```
+
+       
 
 
 
