@@ -91,9 +91,9 @@ public class LoopStrengthReduction {
     
     private void optimizeMultiplications(IrBasicBlock loopHeader, InductionVar iv) {
         // 找到循环体中所有 iv * const 的使用
-        Set<AluInst> toOptimize = new HashSet<>();
+        List<AluInst> toOptimize = new ArrayList<>();
         
-        for (IrBasicBlock bb : getLoopBlocks(loopHeader)) {
+        for (IrBasicBlock bb : getLoopBlocks(loopHeader, iv)) {
             for (Instruction instr : bb.getInstructions()) {
                 if (instr instanceof AluInst) {
                     AluInst alu = (AluInst) instr;
@@ -111,19 +111,70 @@ public class LoopStrengthReduction {
         // 对每个 mul 创建新的归纳变量
         for (AluInst mul : toOptimize) {
             int mulConst = getMulConstant(mul, iv.phi);
-            if (mulConst != 0) {
-                // 创建 sum = phi(init*mulConst, sum + step*mulConst)
-                // 替换 mul 的使用为 sum
-                // 这个变换需要修改 IR，比较复杂
-                // 暂时标记找到的优化机会
+            if (mulConst == 0)
+                continue;
+
+            // 计算新归纳变量的初始值和步长
+            int newInit = iv.initValue * mulConst;
+            int newStep = iv.stepValue * mulConst;
+
+            // 1. 创建新的 phi: sum = phi(newInit, sum + newStep)
+            PhiInstr sumPhi = new PhiInstr(mul.irType, loopHeader);
+            sumPhi.setParentBasicBlock(loopHeader);
+
+            // 2. 创建累加指令: sum_next = sum + newStep
+            AluInst sumUpdate = new AluInst("ADD", sumPhi, new IrConstInt(newStep));
+            sumUpdate.setParentBasicBlock(iv.updateInstr.getParent());
+
+            // 3. 设置 phi 的输入值
+            // 找到前驱块和回边块
+            for (int i = 0; i < iv.phi.getIncomingBlocks().size(); i++) {
+                IrBasicBlock incBlock = iv.phi.getIncomingBlocks().get(i);
+                IrValue incVal = iv.phi.getIncomingValues().get(i);
+
+                if (incVal instanceof IrConstInt) {
+                    // 这是初始值的边 - 使用 newInit
+                    sumPhi.addIncoming(new IrConstInt(newInit), incBlock);
+                } else {
+                    // 这是回边 - 使用 sumUpdate
+                    sumPhi.addIncoming(sumUpdate, incBlock);
+                }
             }
+
+            // 4. 在 header 开头插入 phi (在原有 phi 之后)
+            int insertIdx = 0;
+            for (int i = 0; i < loopHeader.getInstructions().size(); i++) {
+                if (!(loopHeader.getInstructions().get(i) instanceof PhiInstr)) {
+                    insertIdx = i;
+                    break;
+                }
+                insertIdx = i + 1;
+            }
+            loopHeader.getInstructions().add(insertIdx, sumPhi);
+
+            // 5. 在 iv update 之后插入 sumUpdate
+            IrBasicBlock updateBlock = iv.updateInstr.getParent();
+            int updateIdx = updateBlock.getInstructions().indexOf(iv.updateInstr);
+            if (updateIdx >= 0) {
+                updateBlock.getInstructions().add(updateIdx + 1, sumUpdate);
+            }
+
+            // 6. 替换原 mul 的所有使用为 sumPhi
+            mul.replaceAllUsesWith(sumPhi);
+
+            // 7. 标记 mul 为死代码 (DCE 会清理)
+            // 不直接删除以避免迭代时修改列表
         }
     }
     
-    private Set<IrBasicBlock> getLoopBlocks(IrBasicBlock header) {
-        // 简单实现：返回 header 自身
+    private Set<IrBasicBlock> getLoopBlocks(IrBasicBlock header, InductionVar iv) {
+        // 返回循环头和回边来源块
         Set<IrBasicBlock> blocks = new HashSet<>();
         blocks.add(header);
+        // 添加包含 updateInstr 的块
+        if (iv.updateInstr.getParent() != null) {
+            blocks.add(iv.updateInstr.getParent());
+        }
         return blocks;
     }
     

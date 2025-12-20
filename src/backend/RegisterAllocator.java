@@ -17,7 +17,9 @@ public class RegisterAllocator {
             // Callee-Saved (保存寄存器)
             "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
             // 特殊寄存器
-            "$v1"
+            "$v1", "$gp", "$k0", "$k1",
+            // 参数寄存器 - 参数读取后可复用
+            "$a0", "$a1", "$a2", "$a3"
     };
     private static final int MAX_REGISTERS = REG_NAMES.length;
 
