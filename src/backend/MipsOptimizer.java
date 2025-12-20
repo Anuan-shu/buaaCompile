@@ -1,7 +1,9 @@
 package backend;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class MipsOptimizer {
 
@@ -20,6 +22,7 @@ public class MipsOptimizer {
             current = simplifyAlgebra(current);
             current = simplifyLi(current);
             current = mergeLiAddu(current);
+            current = copyPropagation(current);
 
             // 2. 内存优化
             for (int i = 0; i < 4; i++) {
@@ -451,5 +454,150 @@ public class MipsOptimizer {
             result.add(lines.get(i));
         }
         return result;
+    }
+
+    /**
+     * 拷贝传播
+     * 
+     * 只有当 move 的目的寄存器在后续代码中不再被使用时，才能消除 move
+     */
+    private static List<String> copyPropagation(List<String> lines) {
+        List<String> result = new ArrayList<>();
+        Set<String> safeOps = new HashSet<>();
+        safeOps.add("addu");
+        safeOps.add("subu");
+        safeOps.add("and");
+        safeOps.add("or");
+        safeOps.add("xor");
+        safeOps.add("slt");
+        safeOps.add("sltu");
+        safeOps.add("sll");
+        safeOps.add("srl");
+        safeOps.add("sra");
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            // 只处理 move 指令
+            if (!trimmed.startsWith("move ")) {
+                result.add(line);
+                continue;
+            }
+
+            String[] moveParts = trimmed.split("[\\s,]+");
+            if (moveParts.length != 3) {
+                result.add(line);
+                continue;
+            }
+
+            String moveDest = moveParts[1]; // move 的目的寄存器
+            String moveSrc = moveParts[2]; // move 的源寄存器
+
+            // 检查下一条指令
+            if (i + 1 >= lines.size()) {
+                result.add(line);
+                continue;
+            }
+
+            String nextLine = lines.get(i + 1);
+            String nextTrimmed = nextLine.trim();
+            String[] nextParts = nextTrimmed.split("[\\s,]+");
+
+            // 必须是 4 个部分: OP $dest, $src1, $src2
+            if (nextParts.length != 4) {
+                result.add(line);
+                continue;
+            }
+
+            String op = nextParts[0];
+            String dest = nextParts[1];
+            String src1 = nextParts[2];
+            String src2 = nextParts[3];
+
+            // 必须是安全的操作
+            if (!safeOps.contains(op)) {
+                result.add(line);
+                continue;
+            }
+
+            // moveDest 不能是这条指令的 dest
+            if (dest.equals(moveDest)) {
+                result.add(line);
+                continue;
+            }
+
+            // 检查 moveDest 在哪里被使用
+            boolean usedInSrc1 = src1.equals(moveDest);
+            boolean usedInSrc2 = src2.equals(moveDest);
+
+            // 必须恰好使用一次
+            if (usedInSrc1 && usedInSrc2) {
+                result.add(line);
+                continue;
+            }
+            if (!usedInSrc1 && !usedInSrc2) {
+                result.add(line);
+                continue;
+            }
+
+            // 检查 moveDest 在后续指令中是否还被使用
+            boolean usedLater = isRegisterUsedLater(lines, i + 2, moveDest);
+            if (usedLater) {
+                // moveDest 在后面还有用，不能消除 move
+                result.add(line);
+                continue;
+            }
+
+            // 可以安全地替换并跳过 move
+            String newSrc1 = usedInSrc1 ? moveSrc : src1;
+            String newSrc2 = usedInSrc2 ? moveSrc : src2;
+            String newInst = String.format("\t%s %s, %s, %s", op, dest, newSrc1, newSrc2);
+            result.add(newInst);
+            i++; // 跳过原来的下一行
+        }
+        return result;
+    }
+
+    /**
+     * 检查寄存器在后续指令中是否还被使用
+     * 扫描直到遇到：1) 标签 2) 跳转/分支 3) 寄存器被重新定义
+     */
+    private static boolean isRegisterUsedLater(List<String> lines, int startIdx, String reg) {
+        for (int i = startIdx; i < lines.size(); i++) {
+            String trimmed = lines.get(i).trim();
+
+            // 遇到标签就停止 - 不知道控制流
+            if (trimmed.endsWith(":")) {
+                return true; // 保守假设：可能被使用
+            }
+
+            // 遇到跳转/分支就停止
+            if (trimmed.startsWith("j") || trimmed.startsWith("b") ||
+                    trimmed.equals("syscall") || trimmed.startsWith("jr")) {
+                return true; // 保守假设
+            }
+
+            String[] parts = trimmed.split("[\\s,]+");
+            if (parts.length == 0)
+                continue;
+
+            // 检查是否在这条指令中作为源操作数被使用
+            for (int j = 2; j < parts.length; j++) {
+                if (parts[j].equals(reg)) {
+                    return true; // 被使用了
+                }
+                // 检查内存操作数 offset($reg)
+                if (parts[j].contains("(" + reg + ")")) {
+                    return true;
+                }
+            }
+
+            // 检查是否被重新定义（作为目的寄存器）
+            if (parts.length >= 2 && parts[1].equals(reg)) {
+                return false; // 在被使用之前就被重新定义了，之前的值不再需要
+            }
+        }
+        return false; // 扫描完没找到使用
     }
 }

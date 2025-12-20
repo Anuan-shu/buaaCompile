@@ -124,6 +124,10 @@ public class Visitor {
             LoopStrengthReduction loopSR = new LoopStrengthReduction();
             loopSR.run(IrBuilder.getIrModule());
 
+            // 部分循环展开
+            PartialLoopUnroll partialUnroll = new PartialLoopUnroll();
+            partialUnroll.run(IrBuilder.getIrModule());
+
             simpleConstProp.run(IrBuilder.getIrModule());
 
             // 最终清理
