@@ -120,6 +120,10 @@ public class Visitor {
             GlobalCodeMotion globalCodeMotion = new GlobalCodeMotion();
             globalCodeMotion.run(IrBuilder.getIrModule());
 
+            // 循环强度削减
+            LoopStrengthReduction loopSR = new LoopStrengthReduction();
+            loopSR.run(IrBuilder.getIrModule());
+
             simpleConstProp.run(IrBuilder.getIrModule());
 
             // 最终清理

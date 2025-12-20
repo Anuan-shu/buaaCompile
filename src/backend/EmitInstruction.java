@@ -303,9 +303,8 @@ public class EmitInstruction {
     }
 
     // 尝试优化除法 (x / const)
-    // 使用乘法逆元法： div -> mult (high) + shift + sign_fix
+    // 使用乘法逆元法
     private boolean tryOptimizeDiv(int c, String srcReg, String dstReg) {
-        // 边界情况
         if (c == 1) {
             if (!srcReg.equals(dstReg)) mips.addInst("move " + dstReg + ", " + srcReg);
             return true;
@@ -315,44 +314,24 @@ public class EmitInstruction {
             return true;
         }
 
-        // 1. 处理 2 的幂次 (Branchless fix for negative numbers)
-        // 算法: x / 2^k
-        // if (x < 0) x += (2^k - 1);
-        // return x >> k;
+        // 处理 2 的幂次
         int log2 = getLog2(Math.abs(c));
         if (log2 > 0) {
             int k = log2;
-            // 步骤 A: 获取符号位并构造偏置
-            // $at = src >> 31 (0 or -1)
             mips.addInst("sra $at, " + srcReg + ", 31");
-
-            // $at = $at >>> (32-k)
-            // 如果 src>=0, at=0; 如果 src<0, at = 0...011...1 (共k个1)
             mips.addInst("srl $at, $at, " + (32 - k));
-
-            // 步骤 B: 加上偏置
-            // dst = src + at
             mips.addInst("addu " + dstReg + ", " + srcReg + ", $at");
-
-            // 步骤 C: 算术右移
             mips.addInst("sra " + dstReg + ", " + dstReg + ", " + k);
-
-            // 如果除数是负数 (e.g. / -4)，结果取反
             if (c < 0) {
                 mips.addInst("subu " + dstReg + ", $zero, " + dstReg);
             }
             return true;
         }
 
-        // 2. 处理特定常数 (Magic Number)
-        // 仅处理正除数，负除数情况很少见且容易出错
+        // 查表法 - 只处理验证过的常数
         if (c > 0) {
             long magic;
             int shift;
-
-            // 查表 (M: Magic, S: Shift)
-            // 验证来源: Hacker's Delight / LLVM output
-            // 只保留经过验证的常数
             switch (c) {
                 case 3:
                     magic = 0x55555556L;
@@ -366,64 +345,50 @@ public class EmitInstruction {
                     magic = 0x2AAAAAABL;
                     shift = 0;
                     break;
+                case 7:
+                    magic = 0x92492493L;
+                    shift = 2;
+                    break;
+                case 9:
+                    magic = 0x38E38E39L;
+                    shift = 1;
+                    break;
                 case 10:
                     magic = 0x66666667L;
                     shift = 2;
+                    break;
+                case 11:
+                    magic = 0x2E8BA2E9L;
+                    shift = 1;
                     break;
                 case 12:
                     magic = 0x2AAAAAABL;
                     shift = 1;
                     break;
-                case 20:
-                    magic = 0x66666667L;
-                    shift = 3;
-                    break;
-                case 24:
-                    magic = 0x2AAAAAABL;
-                    shift = 2;
-                    break;
-                case 40:
-                    magic = 0x66666667L;
-                    shift = 4;
-                    break;
-                case 48:
-                    magic = 0x2AAAAAABL;
+                case 25:
+                    magic = 0x51EB851FL;
                     shift = 3;
                     break;
                 case 100:
                     magic = 0x51EB851FL;
                     shift = 5;
                     break;
+                case 1000:
+                    magic = 0x10624DD3L;
+                    shift = 6;
+                    break;
                 default:
                     return false;
             }
-
-            // 生成代码序列
-            // li $at, MAGIC
             mips.addInst(String.format("li $at, 0x%X", magic));
-
-            // mult src, magic
             mips.addInst("mult " + srcReg + ", $at");
-
-            // mfhi $at (高 32 位)
             mips.addInst("mfhi $at");
-
-            // sra $at, $at, shift
-            if (shift > 0) {
+            if (shift > 0)
                 mips.addInst("sra $at, $at, " + shift);
-            }
-
-            // t1 = src >> 31 (符号位)
-            // 注意：我们需要一个临时寄存器，不能覆盖 srcReg ($t0)。
-            // 此时 dstReg ($t2) 是空闲的，可以用作临时
             mips.addInst("srl " + dstReg + ", " + srcReg + ", 31");
-
-            // result = at + sign
             mips.addInst("addu " + dstReg + ", $at, " + dstReg);
-
             return true;
         }
-
         return false;
     }
 
@@ -470,27 +435,25 @@ public class EmitInstruction {
                     optimized = tryOptimizeDiv(val, leftReg, destReg);
                 }
             } else if (instr.getOp().equals("SREM")) {
-                // 公式: x % c = x - (x / c) * c
+                // 优化 x % c
                 if (val != 0) {
-                    // 一个临时寄存器来存商
-                    // destReg 最终存余数，leftReg 存原数 x
-                    // 借用 $v1 作为临时寄存器
-                    String tempReg = "$v1";
-
-                    // 第一步：计算 quotient = x / c
-                    if (tryOptimizeDiv(val, leftReg, tempReg)) {
-                        // 计算 product = quotient * c
-                        boolean mulOptimized = tryOptimizeMul(val, tempReg, tempReg);
-                        // 乘法没能优化，回退到硬件乘法
-                        if (!mulOptimized) {
-                            mips.addInst("li $at, " + val);
-                            mips.addInst("mul " + tempReg + ", " + tempReg + ", $at");
-                        }
-
-                        // 第三步：计算 remainder = x - product
-                        mips.addInst(String.format("subu %s, %s, %s", destReg, leftReg, tempReg));
-
+                    // 特殊情况 1: x % 1 = 0
+                    if (val == 1 || val == -1) {
+                        mips.addInst("move " + destReg + ", $zero");
                         optimized = true;
+                    }
+                    // 通用公式: x % c = x - (x / c) * c
+                    if (!optimized) {
+                        String tempReg = "$v1";
+                        if (tryOptimizeDiv(val, leftReg, tempReg)) {
+                            boolean mulOptimized = tryOptimizeMul(val, tempReg, tempReg);
+                            if (!mulOptimized) {
+                                mips.addInst("li $at, " + val);
+                                mips.addInst("mul " + tempReg + ", " + tempReg + ", $at");
+                            }
+                            mips.addInst(String.format("subu %s, %s, %s", destReg, leftReg, tempReg));
+                            optimized = true;
+                        }
                     }
                 }
             }
@@ -661,14 +624,14 @@ public class EmitInstruction {
         String skipLabel = "skip_" + UUID.randomUUID().toString().replace("-", "");
         // 如果 $t0 == 0 (即不满足条件)，跳过 j 指令
         mips.addInst("beqz $t0, " + skipLabel);
-        mips.addInst("nop");
+        // mips.addInst("nop");
 
         // 处理 True 块的 Phi
         resolvePhiCopies(trueBlock, currentBlock);
 
         // 只有满足条件才执行这个长跳转
         mips.addInst("j " + trueLabel);
-        mips.addInst("nop");
+        // mips.addInst("nop");
 
         mips.addInst(skipLabel + ":");
 
@@ -677,7 +640,7 @@ public class EmitInstruction {
 
         // 否则跳转 falseLabel
         mips.addInst("j " + falseLabel);
-        mips.addInst("nop");
+        // mips.addInst("nop");
 
     }
 
@@ -693,7 +656,7 @@ public class EmitInstruction {
         // 无条件跳转: j label %target
         String targetLabel = currentFuncLabel + "_" + targetName;
         mips.addInst("j " + targetLabel);
-        mips.addInst("nop");
+        // mips.addInst("nop");
     }
 
     // 6. Call 指令
@@ -717,7 +680,7 @@ public class EmitInstruction {
 
         String funcName = instr.getTargetFunction().irName.replace("@", "");
         mips.addInst("jal " + funcName);
-        mips.addInst("nop");
+        // mips.addInst("nop");
 
         if (stackArgs > 0) mips.addInst("addiu $sp, $sp, " + (stackArgs * 4));
         if (!instr.irType.isVoid()) saveReg(instr, "$v0");
@@ -746,7 +709,7 @@ public class EmitInstruction {
                 mips.addInst("lw $ra, -4($sp)");
             }
             mips.addInst("jr $ra");
-            mips.addInst("nop");
+            // mips.addInst("nop");
         }
     }
 

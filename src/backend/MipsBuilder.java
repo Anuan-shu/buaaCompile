@@ -45,7 +45,7 @@ public class MipsBuilder {
         }
 
         mips.addInst("j main");
-        mips.addInst("nop");
+        //mips.addInst("nop");
 
         // 3. 处理函数
         for (IrFunction function : irModule.getFunctions()) {
@@ -64,7 +64,7 @@ public class MipsBuilder {
         mips.addInst("li $v0, 5");   // Syscall 5: read_int
         mips.addInst("syscall");
         mips.addInst("jr $ra");      // 返回调用者 ($v0 中是读取的值)
-        mips.addInst("nop");
+        //mips.addInst("nop");
     }
 
     private static void emitFunction(IrFunction function, boolean optimize) {

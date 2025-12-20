@@ -102,6 +102,12 @@ public class SimpleConstProp {
                                         simplified = true;
                                     } // x / 1 -> x
                                     break;
+                                case "SREM":
+                                    if (rv == 1 || rv == -1) {
+                                        replacement = new IrConstInt(0);
+                                        simplified = true;
+                                    } // x % 1 = 0, x % -1 = 0
+                                    break;
                             }
 
                             if (simplified && replacement != null) {
@@ -143,6 +149,18 @@ public class SimpleConstProp {
                         }
                         // 代数简化：x - x -> 0
                         else if (alu.getOp().equals("SUB") && l == r) {
+                            alu.replaceAllUsesWith(new IrConstInt(0));
+                            dead.add(alu);
+                            changed = true;
+                        }
+                        // 代数简化：x / x -> 1 (假设 x != 0)
+                        else if (alu.getOp().equals("SDIV") && l == r) {
+                            alu.replaceAllUsesWith(new IrConstInt(1));
+                            dead.add(alu);
+                            changed = true;
+                        }
+                        // 代数简化：x % x -> 0 (假设 x != 0)
+                        else if (alu.getOp().equals("SREM") && l == r) {
                             alu.replaceAllUsesWith(new IrConstInt(0));
                             dead.add(alu);
                             changed = true;
