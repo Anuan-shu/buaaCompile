@@ -1,8 +1,10 @@
 package backend;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class MipsOptimizer {
@@ -18,20 +20,44 @@ public class MipsOptimizer {
             List<String> current = new ArrayList<>(optimized);
 
             // 1. 先进行算术和Move优化，减少干扰
-            current = removeRedundantMoves(current);
+            for (int j = 0; j < 4; j++) {
+                current = removeRedundantMoves(current);
+                current = removeMoveChains(current);
+            }
             current = simplifyAlgebra(current);
             current = simplifyLi(current);
             current = mergeLiAddu(current);
             current = copyPropagation(current);
 
-            // 2. 内存优化
-            for (int i = 0; i < 4; i++) {
+            // 1.5 消除无用栈操作
+            current = removeUselessStackOps(current);
+
+            // 2. 内存优化 - 多次迭代以更彻底消除
+            for (int i = 0; i < 8; i++) {
                 current = removeRedundantLoad(current);
+                current = removeRedundantStore(current);
+                current = deadStoreElimination(current);
             }
-            current = removeRedundantStore(current);
+            current = aggressiveMemoryElimination(current);
+
+            // 2.5 地址加载优化
+            current = fuseLaLw(current);
+
             // 3. 分支优化
             current = optimizeBranches(current);
             current = removeRedundantJumps(current);
+
+            // 4. 指令选择优化
+            current = betterInstructionSelection(current);
+
+            // 5. 消除冗余比较
+            current = removeRedundantCompare(current);
+
+            // 6. 最后再次清理 move
+            for (int j = 0; j < 4; j++) {
+                current = removeRedundantMoves(current);
+                current = removeMoveChains(current);
+            }
 
             optimized = current;
             changed = optimized.size() != oldSize;
@@ -140,6 +166,164 @@ public class MipsOptimizer {
     }
 
     /**
+     * 死存储消除：删除被后续覆盖的 sw
+     * 模式：
+     * sw $t0, offset($fp)
+     * ... (没有 lw 从这个地址读取)
+     * sw $t1, offset($fp) <- 第一个 sw 是死存储
+     */
+    private static List<String> deadStoreElimination(List<String> lines) {
+        List<String> result = new ArrayList<>();
+
+        // 记录每个地址最后一次 sw 的索引
+        Map<String, Integer> lastStoreIdx = new HashMap<>();
+        // 记录哪些索引应该被删除
+        Set<Integer> toRemove = new HashSet<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+            String[] parts = trimmed.split("[\\s,]+");
+
+            // 遇到标签或分支，清空状态
+            if (trimmed.endsWith(":") || trimmed.startsWith("b") ||
+                    trimmed.startsWith("j") || trimmed.equals("syscall")) {
+                lastStoreIdx.clear();
+                continue;
+            }
+
+            if (parts.length == 3 && parts[0].equals("sw") && parts[2].contains("($fp)")) {
+                String addr = parts[2];
+                if (lastStoreIdx.containsKey(addr)) {
+                    // 之前有一个 sw 到同一地址，且中间没有 lw，标记为删除
+                    toRemove.add(lastStoreIdx.get(addr));
+                }
+                lastStoreIdx.put(addr, i);
+            } else if (parts.length == 3 && parts[0].equals("lw") && parts[2].contains("($fp)")) {
+                // lw 会使用这个地址的值，所以之前的 sw 不是死存储
+                String addr = parts[2];
+                lastStoreIdx.remove(addr);
+            }
+        }
+
+        // 构建结果，跳过死存储
+        for (int i = 0; i < lines.size(); i++) {
+            if (!toRemove.contains(i)) {
+                result.add(lines.get(i));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 激进内存消除：追踪寄存器中已有的值，消除冗余 lw
+     * 只在 lw 之后建立追踪，sw 不建立新追踪（因为源寄存器可能被修改）
+     */
+    private static List<String> aggressiveMemoryElimination(List<String> lines) {
+        List<String> result = new ArrayList<>();
+
+        // 追踪：地址 -> 持有该地址值的寄存器
+        Map<String, String> addrToReg = new HashMap<>();
+        // 追踪：寄存器 -> 它持有的地址（反向映射）
+        Map<String, String> regToAddr = new HashMap<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            // 空行直接添加
+            if (trimmed.isEmpty()) {
+                result.add(line);
+                continue;
+            }
+
+            String[] parts = trimmed.split("[\\s,]+");
+
+            // 遇到标签、分支、跳转、syscall、jal，清空状态
+            if (trimmed.endsWith(":") || trimmed.startsWith("b") ||
+                    trimmed.startsWith("j") || trimmed.equals("syscall") ||
+                    trimmed.startsWith("#") || parts[0].equals("jal") ||
+                    parts[0].equals("jr") || parts[0].equals("jalr")) {
+                addrToReg.clear();
+                regToAddr.clear();
+                result.add(line);
+                continue;
+            }
+
+            boolean replaced = false;
+
+            if (parts.length == 3 && parts[0].equals("lw") && parts[2].contains("($fp)")) {
+                String reg = parts[1];
+                String addr = parts[2];
+
+                // 先使目标寄存器的旧映射失效
+                invalidateReg(reg, addrToReg, regToAddr);
+
+                // 如果这个地址的值已经在某个寄存器中
+                if (addrToReg.containsKey(addr)) {
+                    String srcReg = addrToReg.get(addr);
+                    if (srcReg.equals(reg)) {
+                        // lw 到同一个寄存器，值没变，跳过
+                        replaced = true;
+                    } else {
+                        // lw 到不同寄存器，用 move 替换
+                        result.add("\tmove " + reg + ", " + srcReg);
+                        replaced = true;
+                        // 新寄存器也持有这个地址的值
+                        addrToReg.put(addr, reg);
+                        regToAddr.put(reg, addr);
+                    }
+                }
+
+                if (!replaced) {
+                    // lw 成功执行后，建立追踪
+                    addrToReg.put(addr, reg);
+                    regToAddr.put(reg, addr);
+                }
+            } else if (parts.length == 3 && parts[0].equals("sw") && parts[2].contains("($fp)")) {
+                String reg = parts[1];
+                String addr = parts[2];
+
+                // sw 后，这个地址有新值了
+                // 清除该地址的旧映射（因为值可能变了）
+                if (addrToReg.containsKey(addr)) {
+                    String oldReg = addrToReg.get(addr);
+                    if (!oldReg.equals(reg)) {
+                        // 如果存入的寄存器和之前追踪的不同，清除旧追踪
+                        regToAddr.remove(oldReg);
+                    }
+                }
+                // sw 之后，这个地址的值就是这个寄存器的值
+                addrToReg.put(addr, reg);
+                regToAddr.put(reg, addr);
+            } else if (parts.length >= 2 && !parts[0].equals("sw") && !parts[0].equals("lw")) {
+                // 其他指令可能修改寄存器，使追踪失效
+                String destReg = parts[1];
+                if (destReg.startsWith("$")) {
+                    invalidateReg(destReg, addrToReg, regToAddr);
+                }
+            }
+
+            if (!replaced) {
+                result.add(line);
+            }
+        }
+
+        return result;
+    }
+
+    private static void invalidateReg(String reg, Map<String, String> addrToReg, Map<String, String> regToAddr) {
+        if (regToAddr.containsKey(reg)) {
+            String addr = regToAddr.get(reg);
+            // 只有当这个地址映射到这个寄存器时才清除
+            if (addrToReg.get(addr) != null && addrToReg.get(addr).equals(reg)) {
+                addrToReg.remove(addr);
+            }
+            regToAddr.remove(reg);
+        }
+    }
+
+    /**
      * 优化：去除无用的跳转
      * 模式：
      * j Label
@@ -185,23 +369,85 @@ public class MipsOptimizer {
     }
 
     /**
-     * 优化：删除源和目的相同的 move 指令
-     * 例如: move $t0, $t0 -> 删除
+     * 优化：删除冗余的 move 指令
+     * 1. move $t0, $t0 -> 删除
+     * 2. move $t1, $t0; move $t0, $t1 (如果 $t1 之后不再使用) -> 删除两条
      */
     private static List<String> removeRedundantMoves(List<String> lines) {
         List<String> result = new ArrayList<>();
-        for (String line : lines) {
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
             String trimmed = line.trim();
-            if (trimmed.startsWith("move")) {
-                // move $t0, $t0
+
+            if (trimmed.startsWith("move ")) {
                 String[] parts = trimmed.split("[\\s,]+");
-                if (parts.length == 3 && parts[1].equals(parts[2])) {
-                    continue; // 跳过添加
+                if (parts.length == 3) {
+                    String dest = parts[1];
+                    String src = parts[2];
+
+                    // move $t0, $t0 -> 删除
+                    if (dest.equals(src)) {
+                        continue;
+                    }
+
+                    // move $t1, $t0; move $t0, $t1 -> 如果 $t1 之后不被使用，删除两条
+                    if (i + 1 < lines.size()) {
+                        String nextTrimmed = lines.get(i + 1).trim();
+                        String[] nextParts = nextTrimmed.split("[\\s,]+");
+                        if (nextParts.length == 3 && nextParts[0].equals("move") &&
+                                nextParts[1].equals(src) && nextParts[2].equals(dest)) {
+                            // 检查 dest 在 i+2 之后是否被使用
+                            if (!isRegUsedLater(lines, i + 2, dest)) {
+                                // $t1 (dest) 之后不再使用，可以安全删除两条
+                                i++; // 跳过下一条
+                                continue;
+                            }
+                        }
+                    }
                 }
             }
             result.add(line);
         }
         return result;
+    }
+
+    /**
+     * 检查寄存器在指定位置之后是否被使用（作为源操作数）
+     */
+    private static boolean isRegUsedLater(List<String> lines, int startIdx, String reg) {
+        for (int i = startIdx; i < lines.size(); i++) {
+            String trimmed = lines.get(i).trim();
+
+            // 遇到标签，继续检查（控制流可能跳转）
+            if (trimmed.endsWith(":"))
+                continue;
+
+            // 遇到跳转或分支，保守返回 true（寄存器可能在其他地方使用）
+            if (trimmed.startsWith("j ") || trimmed.startsWith("jal") ||
+                    trimmed.startsWith("jr") || trimmed.startsWith("b")) {
+                return true;
+            }
+
+            String[] parts = trimmed.split("[\\s,]+");
+            if (parts.length < 2)
+                continue;
+
+            // 检查是否作为源操作数使用
+            for (int j = 2; j < parts.length; j++) {
+                String operand = parts[j];
+                // 处理 offset($reg) 格式
+                if (operand.contains("(" + reg + ")") || operand.equals(reg)) {
+                    return true;
+                }
+            }
+
+            // 如果寄存器被重新定义（作为目的操作数），之后的值与之前无关
+            if (parts.length >= 2 && parts[1].equals(reg)) {
+                return false;
+            }
+        }
+        return false;
     }
 
     /**
@@ -425,12 +671,12 @@ public class MipsOptimizer {
                         // 检查下一条是否是使用这个寄存器的 addu
                         if (i + 1 < lines.size() && imm >= -32768 && imm <= 32767) {
                             String nextTrimmed = lines.get(i + 1).trim();
-                            String[] adduParts = nextTrimmed.split("[\\s,]+");
+                            String[] opParts = nextTrimmed.split("[\\s,]+");
 
-                            if (adduParts.length == 4 && adduParts[0].equals("addu")) {
-                                String destReg = adduParts[1];
-                                String srcReg1 = adduParts[2];
-                                String srcReg2 = adduParts[3];
+                            if (opParts.length == 4 && opParts[0].equals("addu")) {
+                                String destReg = opParts[1];
+                                String srcReg1 = opParts[2];
+                                String srcReg2 = opParts[3];
 
                                 // 检查 liReg 是 addu 的第二个或第三个操作数
                                 if (srcReg2.equals(liReg) && !srcReg1.equals(liReg)) {
@@ -442,6 +688,20 @@ public class MipsOptimizer {
                                     // addu $d, $liReg, $s -> addiu $d, $s, imm
                                     result.add(String.format("\taddiu %s, %s, %d", destReg, srcReg2, imm));
                                     i++; // 跳过 addu
+                                    continue;
+                                }
+                            }
+                            // 新增: li + subu -> addiu with negative
+                            else if (opParts.length == 4 && opParts[0].equals("subu")) {
+                                String destReg = opParts[1];
+                                String srcReg1 = opParts[2];
+                                String srcReg2 = opParts[3];
+
+                                // subu $d, $s, $liReg -> addiu $d, $s, -imm
+                                if (srcReg2.equals(liReg) && !srcReg1.equals(liReg) && -imm >= -32768
+                                        && -imm <= 32767) {
+                                    result.add(String.format("\taddiu %s, %s, %d", destReg, srcReg1, -imm));
+                                    i++; // 跳过 subu
                                     continue;
                                 }
                             }
@@ -599,5 +859,251 @@ public class MipsOptimizer {
             }
         }
         return false; // 扫描完没找到使用
+    }
+
+    /**
+     * 更好的指令选择优化
+     */
+    private static List<String> betterInstructionSelection(List<String> lines) {
+        List<String> result = new ArrayList<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+            String[] parts = trimmed.split("[\\s,]+");
+
+            boolean skip = false;
+            String replacement = null;
+
+            // 优化 1: beq $reg, $zero, label -> beqz $reg, label
+            if (parts.length == 4 && parts[0].equals("beq") && parts[2].equals("$zero")) {
+                replacement = "\tbeqz " + parts[1] + ", " + parts[3];
+            }
+            // 优化 2: bne $reg, $zero, label -> bnez $reg, label
+            else if (parts.length == 4 && parts[0].equals("bne") && parts[2].equals("$zero")) {
+                replacement = "\tbnez " + parts[1] + ", " + parts[3];
+            }
+            // 优化 3: li $t0, 0 -> move $t0, $zero
+            else if (parts.length == 3 && parts[0].equals("li") && parts[2].equals("0")) {
+                replacement = "\tmove " + parts[1] + ", $zero";
+            }
+            // 优化 4: addu $rd, $rs, $zero -> move $rd, $rs
+            else if (parts.length == 4 && parts[0].equals("addu") && parts[3].equals("$zero")) {
+                if (!parts[1].equals(parts[2])) {
+                    replacement = "\tmove " + parts[1] + ", " + parts[2];
+                } else {
+                    skip = true; // addu $t0, $t0, $zero -> 无用
+                }
+            }
+            // 优化 5: addu $rd, $zero, $rs -> move $rd, $rs
+            else if (parts.length == 4 && parts[0].equals("addu") && parts[2].equals("$zero")) {
+                if (!parts[1].equals(parts[3])) {
+                    replacement = "\tmove " + parts[1] + ", " + parts[3];
+                } else {
+                    skip = true;
+                }
+            }
+            // 优化 6: or $rd, $rs, $zero -> move $rd, $rs
+            else if (parts.length == 4 && parts[0].equals("or") && parts[3].equals("$zero")) {
+                if (!parts[1].equals(parts[2])) {
+                    replacement = "\tmove " + parts[1] + ", " + parts[2];
+                } else {
+                    skip = true;
+                }
+            }
+            // 优化 7: li $t0, small; addu $t1, $t2, $t0 -> addiu $t1, $t2, small
+            // (已在 mergeLiAddu 中处理)
+
+            // 优化 8: 删除跳转到下一行的 j 指令
+            else if (parts.length == 2 && parts[0].equals("j")) {
+                String target = parts[1];
+                if (i + 1 < lines.size()) {
+                    String nextLine = lines.get(i + 1).trim();
+                    if (nextLine.equals(target + ":")) {
+                        skip = true; // j label 后面紧跟 label: -> 删除 j
+                    }
+                }
+            }
+
+            if (skip) {
+                continue;
+            } else if (replacement != null) {
+                result.add(replacement);
+            } else {
+                result.add(line);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 消除 move 链：move $t3, $t0; move $t0, $t3
+     * 第二条 move 是 no-op（$t0 已经有自己的值），只删除它
+     * 保留第一条 move（$t3 需要获得 $t0 的值）
+     */
+    private static List<String> removeMoveChains(List<String> lines) {
+        List<String> result = new ArrayList<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            if (trimmed.startsWith("move ")) {
+                String[] parts = trimmed.split("[\\s,]+");
+                if (parts.length == 3) {
+                    String dest = parts[1];
+                    String src = parts[2];
+
+                    // 检查下一条是否是反向 move
+                    if (i + 1 < lines.size()) {
+                        String next = lines.get(i + 1).trim();
+                        String[] nextParts = next.split("[\\s,]+");
+                        if (nextParts.length == 3 && nextParts[0].equals("move") &&
+                                nextParts[1].equals(src) && nextParts[2].equals(dest)) {
+                            // move $t3, $t0; move $t0, $t3
+                            // 保留第一条 (result.add(line))
+                            // 跳过第二条 (它是 no-op)
+                            result.add(line);
+                            i++; // 跳过下一条
+                            continue;
+                        }
+                    }
+                }
+            }
+            result.add(line);
+        }
+        return result;
+    }
+
+    /**
+     * 消除无用栈操作
+     * addiu $sp, $sp, -4; sw $t0, 0($sp); lw $rx, 0($sp); addiu $sp, $sp, 4 -> move
+     * $rx, $t0
+     */
+    private static List<String> removeUselessStackOps(List<String> lines) {
+        List<String> result = new ArrayList<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            // 检测模式：addiu $sp, $sp, -4
+            if (trimmed.equals("addiu $sp, $sp, -4") && i + 3 < lines.size()) {
+                String sw = lines.get(i + 1).trim();
+                String lw = lines.get(i + 2).trim();
+                String addBack = lines.get(i + 3).trim();
+
+                // sw $tX, 0($sp)
+                if (sw.startsWith("sw ") && sw.contains("0($sp)") &&
+                        lw.startsWith("lw ") && lw.contains("0($sp)") &&
+                        addBack.equals("addiu $sp, $sp, 4")) {
+
+                    String[] swParts = sw.split("[\\s,]+");
+                    String[] lwParts = lw.split("[\\s,]+");
+                    if (swParts.length >= 2 && lwParts.length >= 2) {
+                        String srcReg = swParts[1];
+                        String destReg = lwParts[1];
+
+                        if (srcReg.equals(destReg)) {
+                            // 同一寄存器，直接删除所有 4 条
+                            i += 3;
+                            continue;
+                        } else {
+                            // 不同寄存器，替换为 move
+                            result.add("\tmove " + destReg + ", " + srcReg);
+                            i += 3;
+                            continue;
+                        }
+                    }
+                }
+            }
+            result.add(line);
+        }
+        return result;
+    }
+
+    /**
+     * 消除冗余比较：xor $t, $t, $zero; sltu $t, $zero, $t -> bnez 可以直接使用原值
+     * 因为 (bool != 0) == bool
+     */
+    private static List<String> removeRedundantCompare(List<String> lines) {
+        List<String> result = new ArrayList<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            // 检测：move $t1, $zero 或 li $t1, 0
+            if ((trimmed.startsWith("move ") && trimmed.contains("$zero")) ||
+                    (trimmed.startsWith("li ") && trimmed.endsWith(", 0"))) {
+
+                String[] parts = trimmed.split("[\\s,]+");
+                if (parts.length >= 2 && i + 1 < lines.size()) {
+                    String zeroReg = parts[1];
+                    String next = lines.get(i + 1).trim();
+
+                    // xor $t2, $t0, $zeroReg
+                    if (next.startsWith("xor ") && next.contains(zeroReg)) {
+                        String[] xorParts = next.split("[\\s,]+");
+                        if (xorParts.length == 4 &&
+                                (xorParts[3].equals(zeroReg) || xorParts[2].equals(zeroReg))) {
+                            // xor $dest, $src, $zero = move $dest, $src
+                            String dest = xorParts[1];
+                            String src = xorParts[2].equals(zeroReg) ? xorParts[3] : xorParts[2];
+
+                            // 跳过 move $t1, $zero
+                            // 替换 xor 为 move
+                            result.add("\tmove " + dest + ", " + src);
+                            i++; // 跳过 xor
+                            continue;
+                        }
+                    }
+                }
+            }
+            result.add(line);
+        }
+        return result;
+    }
+
+    /**
+     * 合并 la + lw/sw 为直接寻址
+     * la $t1, label; lw $t0, 0($t1) -> lw $t0, label
+     * la $t1, label; sw $t0, 0($t1) -> sw $t0, label
+     */
+    private static List<String> fuseLaLw(List<String> lines) {
+        List<String> result = new ArrayList<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            // la $t1, label
+            if (trimmed.startsWith("la ") && i + 1 < lines.size()) {
+                String[] laParts = trimmed.split("[\\s,]+");
+                if (laParts.length == 3) {
+                    String addrReg = laParts[1];
+                    String label = laParts[2];
+
+                    String next = lines.get(i + 1).trim();
+                    String[] nextParts = next.split("[\\s,]+");
+
+                    // lw $t0, 0($t1)
+                    if (nextParts.length == 3 &&
+                            (nextParts[0].equals("lw") || nextParts[0].equals("sw")) &&
+                            nextParts[2].equals("0(" + addrReg + ")")) {
+
+                        String op = nextParts[0];
+                        String dataReg = nextParts[1];
+
+                        // 合并为 lw/sw $t0, label
+                        result.add("\t" + op + " " + dataReg + ", " + label);
+                        i++; // 跳过 lw/sw
+                        continue;
+                    }
+                }
+            }
+            result.add(line);
+        }
+        return result;
     }
 }

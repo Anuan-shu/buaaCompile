@@ -68,6 +68,10 @@ public class Visitor {
         VisitorMainFuncDef.LLVMVisitMainFuncDef(comUnit.GetMainFuncDef());
 
         if (optimize) {
+            // 0. 早期常量函数求值 - 在内联前求值
+            ConstFunctionEval constFuncEval = new ConstFunctionEval();
+            constFuncEval.run(IrBuilder.getIrModule());
+
             // 1. 基础内联与合并
             FunctionInlining functionInlining = new FunctionInlining();
             functionInlining.run(IrBuilder.getIrModule());
@@ -84,7 +88,6 @@ public class Visitor {
             dce.run(IrBuilder.getIrModule());
 
             // 4. 编译时常量函数求值 (必须在 Mem2Reg 之后，否则会有 store 指令)
-            ConstFunctionEval constFuncEval = new ConstFunctionEval();
             constFuncEval.run(IrBuilder.getIrModule());
 
             // 4.1 常量传播和GVN

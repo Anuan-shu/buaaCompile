@@ -548,100 +548,164 @@ public class EmitInstruction {
     // 2. Load 指令: %val = load i32, i32* %ptr
     private void emitLoad(LoadInstr instr) {
         IrValue ptr = instr.getPtr();
-        // ptr 是一个指针（地址）。
-        // 如果 ptr 是全局变量，loadToReg 会生成 la $t1, label
-        // 如果 ptr 是局部变量(alloca出来的)，loadToReg 会从栈里把它存的地址读到 $t1
-        loadToReg(ptr, "$t1");
 
-        mips.addInst("lw $t0, 0($t1)"); // 从地址 $t1 处读取真实的值
-        saveReg(instr, "$t0");          // 把值存入 %val 的栈槽
+        // 确定结果寄存器
+        String destReg = "$t0";
+        if (regAllocation != null && regAllocation.containsKey(instr)) {
+            destReg = RegisterAllocator.REG_NAMES[regAllocation.get(instr)];
+        }
+
+        // ptr 是一个指针（地址）
+        String ptrReg = getOpReg(ptr, "$t1");
+
+        mips.addInst("lw " + destReg + ", 0(" + ptrReg + ")");
+
+        // 只有在使用临时寄存器时才需要 saveReg
+        if (destReg.equals("$t0")) {
+            saveReg(instr, destReg);
+        }
     }
 
-    // 3. Store 指令: store i32 %val, i32* %ptr
     private void emitStore(StoreInstr instr) {
         IrValue val = instr.getVal();
         IrValue ptr = instr.getPtr();
 
-        loadToReg(val, "$t0"); // 加载要存储的数据
-        loadToReg(ptr, "$t1"); // 加载目标地址
+        // 智能获取寄存器，避免不必要的 move
+        String valReg = getOpReg(val, "$t0");
+        String ptrReg = getOpReg(ptr, "$t1");
 
-        mips.addInst("sw $t0, 0($t1)"); // 写入内存
+        mips.addInst("sw " + valReg + ", 0(" + ptrReg + ")");
     }
 
     // 4. cmp 指令
     // MIPS 没有类似 LLVM 的 i1 类型，用 0 和 1 整数表示
     private void emitIcmp(CmpInstr instr) {
-        loadToReg(instr.getLeft(), "$t0");
-        loadToReg(instr.getRight(), "$t1");
+        String leftReg = getOpReg(instr.getLeft(), "$t0");
+        String rightReg = getOpReg(instr.getRight(), "$t1");
 
-        // 目标：若条件成立，$t2 = 1，否则 $t2 = 0
+        // 确定结果寄存器
+        String destReg = "$t2";
+        if (regAllocation != null && regAllocation.containsKey(instr)) {
+            destReg = RegisterAllocator.REG_NAMES[regAllocation.get(instr)];
+        }
+
         switch (instr.getOp()) {
             case "EQ":  // ==
-                mips.addInst("xor $t2, $t0, $t1"); // 若相等，异或为0
-                mips.addInst("sltiu $t2, $t2, 1");  // 若 $t2 < 1 (即为0)，则置1
+                mips.addInst("xor " + destReg + ", " + leftReg + ", " + rightReg);
+                mips.addInst("sltiu " + destReg + ", " + destReg + ", 1");
                 break;
             case "NE":  // !=
-                mips.addInst("xor $t2, $t0, $t1");
-                mips.addInst("sltu $t2, $zero, $t2"); // 若 0 < $t2，则置1
+                mips.addInst("xor " + destReg + ", " + leftReg + ", " + rightReg);
+                mips.addInst("sltu " + destReg + ", $zero, " + destReg);
                 break;
             case "GT": // >
-                mips.addInst("slt $t2, $t1, $t0"); // if t1 < t0, t2 = 1
+                mips.addInst("slt " + destReg + ", " + rightReg + ", " + leftReg);
                 break;
-            case "GE": // >=  (t0 >= t1  <==>  !(t0 < t1))
-                mips.addInst("slt $t2, $t0, $t1"); // check t0 < t1
-                mips.addInst("xori $t2, $t2, 1");  // 取反
+            case "GE": // >=
+                mips.addInst("slt " + destReg + ", " + leftReg + ", " + rightReg);
+                mips.addInst("xori " + destReg + ", " + destReg + ", 1");
                 break;
             case "LT": // <
-                mips.addInst("slt $t2, $t0, $t1");
+                mips.addInst("slt " + destReg + ", " + leftReg + ", " + rightReg);
                 break;
-            case "LE": // <= (t0 <= t1 <==> !(t1 < t0))
-                mips.addInst("slt $t2, $t1, $t0");
-                mips.addInst("xori $t2, $t2, 1");
+            case "LE": // <=
+                mips.addInst("slt " + destReg + ", " + rightReg + ", " + leftReg);
+                mips.addInst("xori " + destReg + ", " + destReg + ", 1");
                 break;
             default:
                 break;
         }
-        saveReg(instr, "$t2");
+
+        // 只有在使用临时寄存器时才需要 saveReg
+        if (destReg.equals("$t2")) {
+            saveReg(instr, destReg);
+        }
     }
 
     // 5. Branch 指令
     private void emitBr(BranchInstr instr) {
-
-        // 条件跳转: br i1 %cond, label %true, label %false
-        loadToReg(instr.getCond(), "$t0");
-
         IrBasicBlock currentBlock = (IrBasicBlock) instr.getParent();
         IrBasicBlock trueBlock = instr.getTrueBlock();
         IrBasicBlock falseBlock = instr.getFalseBlock();
         String trueName = trueBlock.irName.replace("@", "");
         String falseName = falseBlock.irName.replace("@", "");
-        // 获取 Block 的纯名字 (去掉 function名等前缀)
         String trueLabel = currentFuncLabel + "_" + trueName;
         String falseLabel = currentFuncLabel + "_" + falseName;
 
-        // 如果 cond != 0 (true)，跳转 trueLabel
+        IrValue cond = instr.getCond();
+
+        // 优化：如果条件是 CmpInstr，直接使用 beq/bne
+        if (cond instanceof CmpInstr) {
+            CmpInstr cmp = (CmpInstr) cond;
+            String leftReg = getOpReg(cmp.getLeft(), "$t0");
+            String rightReg = getOpReg(cmp.getRight(), "$t1");
+
+            // 根据比较类型选择分支指令
+            switch (cmp.getOp()) {
+                case "EQ":
+                    // beq leftReg, rightReg, trueLabel
+                    resolvePhiCopies(trueBlock, currentBlock);
+                    mips.addInst("beq " + leftReg + ", " + rightReg + ", " + trueLabel);
+                    resolvePhiCopies(falseBlock, currentBlock);
+                    mips.addInst("j " + falseLabel);
+                    return;
+                case "NE":
+                    // bne leftReg, rightReg, trueLabel
+                    resolvePhiCopies(trueBlock, currentBlock);
+                    mips.addInst("bne " + leftReg + ", " + rightReg + ", " + trueLabel);
+                    resolvePhiCopies(falseBlock, currentBlock);
+                    mips.addInst("j " + falseLabel);
+                    return;
+                case "LT":
+                    // slt + bnez
+                    mips.addInst("slt $at, " + leftReg + ", " + rightReg);
+                    resolvePhiCopies(trueBlock, currentBlock);
+                    mips.addInst("bnez $at, " + trueLabel);
+                    resolvePhiCopies(falseBlock, currentBlock);
+                    mips.addInst("j " + falseLabel);
+                    return;
+                case "GE":
+                    // slt + beqz (opposite of LT)
+                    mips.addInst("slt $at, " + leftReg + ", " + rightReg);
+                    resolvePhiCopies(trueBlock, currentBlock);
+                    mips.addInst("beqz $at, " + trueLabel);
+                    resolvePhiCopies(falseBlock, currentBlock);
+                    mips.addInst("j " + falseLabel);
+                    return;
+                case "GT":
+                    // slt with swapped operands + bnez
+                    mips.addInst("slt $at, " + rightReg + ", " + leftReg);
+                    resolvePhiCopies(trueBlock, currentBlock);
+                    mips.addInst("bnez $at, " + trueLabel);
+                    resolvePhiCopies(falseBlock, currentBlock);
+                    mips.addInst("j " + falseLabel);
+                    return;
+                case "LE":
+                    // slt with swapped + beqz (opposite of GT)
+                    mips.addInst("slt $at, " + rightReg + ", " + leftReg);
+                    resolvePhiCopies(trueBlock, currentBlock);
+                    mips.addInst("beqz $at, " + trueLabel);
+                    resolvePhiCopies(falseBlock, currentBlock);
+                    mips.addInst("j " + falseLabel);
+                    return;
+                default:
+                    break;
+            }
+        }
+
+        // 默认处理：加载条件到寄存器
+        loadToReg(cond, "$t0");
 
         String skipLabel = "skip_" + UUID.randomUUID().toString().replace("-", "");
-        // 如果 $t0 == 0 (即不满足条件)，跳过 j 指令
         mips.addInst("beqz $t0, " + skipLabel);
-        // mips.addInst("nop");
 
-        // 处理 True 块的 Phi
         resolvePhiCopies(trueBlock, currentBlock);
-
-        // 只有满足条件才执行这个长跳转
         mips.addInst("j " + trueLabel);
-        // mips.addInst("nop");
 
         mips.addInst(skipLabel + ":");
 
-        // 处理 False 块的 Phi
         resolvePhiCopies(falseBlock, currentBlock);
-
-        // 否则跳转 falseLabel
         mips.addInst("j " + falseLabel);
-        // mips.addInst("nop");
-
     }
 
     private void emitJump(JumpInstr instr) {

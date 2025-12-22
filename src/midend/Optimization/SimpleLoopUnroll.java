@@ -62,6 +62,7 @@ public class SimpleLoopUnroll {
         IrBasicBlock body;  // 在简单循环中 body == latch
 
         PhiInstr indVar;    // 归纳变量 i
+        List<PhiInstr> allPhis = new ArrayList<>(); // 所有 phi 节点
         int startVal;
         int endVal;
         int stepVal;
@@ -95,12 +96,25 @@ public class SimpleLoopUnroll {
         for (Instruction i : header.getInstructions()) {
             if (i instanceof PhiInstr) phis.add((PhiInstr) i);
         }
-        if (phis.size() != 1) return null;
-        PhiInstr phi = phis.get(0);
+        if (phis.isEmpty())
+            return null;
 
+        // 找到用于循环条件的归纳变量 phi
         if (!(br.getCond() instanceof CmpInstr)) return null;
         CmpInstr cmp = (CmpInstr) br.getCond();
-        if (cmp.getLeft() != phi || !(cmp.getRight() instanceof IrConstInt)) return null;
+        if (!(cmp.getRight() instanceof IrConstInt))
+            return null;
+
+        // 查找 cmp.getLeft() 对应的 phi
+        PhiInstr phi = null;
+        for (PhiInstr p : phis) {
+            if (cmp.getLeft() == p) {
+                phi = p;
+                break;
+            }
+        }
+        if (phi == null)
+            return null;
 
         int bound = ((IrConstInt) cmp.getRight()).getValue();
         int start = 0;
@@ -148,6 +162,7 @@ public class SimpleLoopUnroll {
         info.latch = body;
         info.exit = exit;
         info.indVar = phi;
+        info.allPhis = phis; // 保存所有 phi 节点
         info.startVal = start;
         info.endVal = bound;
         info.stepVal = step;
@@ -203,6 +218,29 @@ public class SimpleLoopUnroll {
             IrConstInt constI = new IrConstInt(currentI);
             valueMap.put(info.indVar, constI);
 
+            // 处理所有 phi 节点的初始值
+            for (PhiInstr p : info.allPhis) {
+                if (p == info.indVar)
+                    continue; // 归纳变量已处理
+
+                // 获取 phi 的前驱块索引
+                int bodyIdx = -1;
+                for (int j = 0; j < p.getIncomingBlocks().size(); j++) {
+                    if (p.getIncomingBlocks().get(j) == info.body) {
+                        bodyIdx = j;
+                        break;
+                    }
+                }
+
+                if (iter == 0) {
+                    // 第一次迭代使用来自 preheader 的值
+                    int preIdx = (bodyIdx == 0) ? 1 : 0;
+                    IrValue initVal = p.getIncomingValues().get(preIdx);
+                    valueMap.put(p, initVal);
+                }
+                // 后续迭代的值将由上一轮 valueMap 传递
+            }
+
             // 复制 Body 指令
             for (Instruction inst : info.body.getInstructions()) {
                 // 跳过跳转指令
@@ -213,6 +251,23 @@ public class SimpleLoopUnroll {
                 if (newInst != null) {
                     clonedBlock.addInstruction(newInst);
                     valueMap.put(inst, newInst);
+                }
+            }
+
+            // 更新非归纳变量 phi 的下一次迭代值
+            for (PhiInstr p : info.allPhis) {
+                if (p == info.indVar)
+                    continue;
+
+                // 获取来自 body 的值
+                for (int j = 0; j < p.getIncomingBlocks().size(); j++) {
+                    if (p.getIncomingBlocks().get(j) == info.body) {
+                        IrValue bodyVal = p.getIncomingValues().get(j);
+                        if (valueMap.containsKey(bodyVal)) {
+                            valueMap.put(p, valueMap.get(bodyVal));
+                        }
+                        break;
+                    }
                 }
             }
 
