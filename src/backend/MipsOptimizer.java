@@ -20,17 +20,20 @@ public class MipsOptimizer {
             List<String> current = new ArrayList<>(optimized);
 
             // 1. 先进行算术和Move优化，减少干扰
-            for (int j = 0; j < 4; j++) {
+            for (int j = 0; j < 8; j++) { // 增加到 8 次
                 current = removeRedundantMoves(current);
                 current = removeMoveChains(current);
+                current = copyPropagation(current); // 每轮都做 copy prop
             }
             current = simplifyAlgebra(current);
             current = simplifyLi(current);
             current = mergeLiAddu(current);
-            current = copyPropagation(current);
 
             // 1.5 消除无用栈操作
             current = removeUselessStackOps(current);
+
+            // 1.6 MIPS 级别死代码消除
+            current = mipsDeadCodeElimination(current);
 
             // 2. 内存优化 - 多次迭代以更彻底消除
             for (int i = 0; i < 8; i++) {
@@ -53,10 +56,17 @@ public class MipsOptimizer {
             // 5. 消除冗余比较
             current = removeRedundantCompare(current);
 
+            // 5.5 消除冗余 li
+            current = eliminateRedundantLi(current);
+
+            // 5.6 简单指令调度 - 减少 load-use 延迟
+            current = scheduleInstructions(current);
+
             // 6. 最后再次清理 move
-            for (int j = 0; j < 4; j++) {
+            for (int j = 0; j < 8; j++) { // 增加到 8 次
                 current = removeRedundantMoves(current);
                 current = removeMoveChains(current);
+                current = copyPropagation(current);
             }
 
             optimized = current;
@@ -561,12 +571,40 @@ public class MipsOptimizer {
                 else if (op.equals("mul") && rt.equals("0")) {
                     replacement = "\tmove " + rd + ", $zero";
                 }
+                // mul $t0, $rs, 2 -> sll $t0, $rs, 1
+                else if (op.equals("mul") && rt.equals("2")) {
+                    replacement = "\tsll " + rd + ", " + rs + ", 1";
+                }
+                // mul $t0, $rs, 4 -> sll $t0, $rs, 2
+                else if (op.equals("mul") && rt.equals("4")) {
+                    replacement = "\tsll " + rd + ", " + rs + ", 2";
+                }
+                // mul $t0, $rs, 8 -> sll $t0, $rs, 3
+                else if (op.equals("mul") && rt.equals("8")) {
+                    replacement = "\tsll " + rd + ", " + rs + ", 3";
+                }
+                // mul $t0, $rs, 16 -> sll $t0, $rs, 4
+                else if (op.equals("mul") && rt.equals("16")) {
+                    replacement = "\tsll " + rd + ", " + rs + ", 4";
+                }
                 // sub $t0, $t1, $t1 -> move $t0, $zero
                 else if ((op.equals("sub") || op.equals("subu")) && rs.equals(rt)) {
                     replacement = "\tmove " + rd + ", $zero";
                 }
                 // sll/srl $t0, $t1, 0 -> move $t0, $t1 or skip
                 else if ((op.equals("sll") || op.equals("srl") || op.equals("sra")) && rt.equals("0")) {
+                    if (rd.equals(rs)) {
+                        skip = true;
+                    } else {
+                        replacement = "\tmove " + rd + ", " + rs;
+                    }
+                }
+                // and $t0, $rs, 0 -> move $t0, $zero
+                else if (op.equals("and") && (rt.equals("0") || rt.equals("$zero"))) {
+                    replacement = "\tmove " + rd + ", $zero";
+                }
+                // or $t0, $rs, 0 -> move $t0, $rs
+                else if (op.equals("or") && (rt.equals("0") || rt.equals("$zero"))) {
                     if (rd.equals(rs)) {
                         skip = true;
                     } else {
@@ -967,6 +1005,25 @@ public class MipsOptimizer {
                             i++; // 跳过下一条
                             continue;
                         }
+
+                        // 前向传播: move $A, $B; move $C, $A -> move $C, $B
+                        // 条件: $A 之后不再使用
+                        if (nextParts[0].equals("move") && nextParts[2].equals(dest)) {
+                            String nextDest = nextParts[1]; // $C
+                            // dest = $A, src = $B, nextDest = $C
+                            // 如果 $A 之后不再使用，可以跳过第一条 move
+                            if (!isRegisterUsedLater(lines, i + 2, dest)) {
+                                // 直接生成 move $C, $B，跳过两条原指令
+                                if (nextDest.equals(src)) {
+                                    // move $A, $B; move $B, $A 变成 nop
+                                    i++; // 跳过下一条
+                                    continue;
+                                }
+                                result.add("\tmove " + nextDest + ", " + src);
+                                i++; // 跳过下一条
+                                continue;
+                            }
+                        }
                     }
                 }
             }
@@ -1102,6 +1159,174 @@ public class MipsOptimizer {
                     }
                 }
             }
+            result.add(line);
+        }
+        return result;
+    }
+
+    /**
+     * MIPS 级别死代码消除
+     * 删除定义后未使用的临时寄存器指令
+     */
+    private static List<String> mipsDeadCodeElimination(List<String> lines) {
+        List<String> result = new ArrayList<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            // li $reg, X 后面紧跟 li $reg, Y -> 删除第一个
+            // 只删除当下一条完全覆盖且不使用当前值
+            if (trimmed.startsWith("li ") && i + 1 < lines.size()) {
+                String[] parts = trimmed.split("[\\s,]+");
+                if (parts.length >= 2) {
+                    String reg = parts[1];
+                    String next = lines.get(i + 1).trim();
+                    // 只有当下一条是 li 或 lw（完全覆盖，不读取原值）才删除
+                    if (next.startsWith("li " + reg + ",") ||
+                            next.startsWith("lw " + reg + ",")) {
+                        // 确保 lw 的地址部分不使用 reg
+                        if (!next.contains("(" + reg + ")")) {
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // move $dest, $src 后面紧跟完全覆盖 $dest -> 删除 move
+            // 只考虑 li 和 lw (不使用 dest 作为源)
+            if (trimmed.startsWith("move ") && i + 1 < lines.size()) {
+                String[] parts = trimmed.split("[\\s,]+");
+                if (parts.length == 3) {
+                    String dest = parts[1];
+                    String next = lines.get(i + 1).trim();
+                    // 只有 li 完全覆盖，或 lw 且地址不用 dest
+                    if (next.startsWith("li " + dest + ",")) {
+                        continue;
+                    }
+                    if (next.startsWith("lw " + dest + ",") && !next.contains("(" + dest + ")")) {
+                        continue;
+                    }
+                }
+            }
+
+            result.add(line);
+        }
+        return result;
+    }
+
+    /**
+     * 消除冗余 li 指令
+     * 1. li $reg, 0 -> move $reg, $zero
+     * 2. 连续相同 li 值跳过（考虑标签和分支）
+     */
+    private static List<String> eliminateRedundantLi(List<String> lines) {
+        List<String> result = new ArrayList<>();
+        Map<String, Integer> lastLiValue = new HashMap<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            // 遇到标签，清除所有跟踪（可能是分支目标）
+            if (trimmed.endsWith(":")) {
+                lastLiValue.clear();
+                result.add(line);
+                continue;
+            }
+
+            // 遇到跳转或分支，清除所有跟踪
+            if (trimmed.startsWith("j ") || trimmed.startsWith("jal") ||
+                    trimmed.startsWith("jr") || trimmed.startsWith("b")) {
+                lastLiValue.clear();
+                result.add(line);
+                continue;
+            }
+
+            // 遇到 syscall，清除所有跟踪
+            if (trimmed.equals("syscall")) {
+                lastLiValue.clear();
+                result.add(line);
+                continue;
+            }
+
+            if (trimmed.startsWith("li ")) {
+                String[] parts = trimmed.split("[\\s,]+");
+                if (parts.length == 3) {
+                    String reg = parts[1];
+                    try {
+                        int val = Integer.parseInt(parts[2]);
+
+                        // 如果上次 li 到这个寄存器是同一个值，跳过
+                        if (lastLiValue.containsKey(reg) && lastLiValue.get(reg) == val) {
+                            continue;
+                        }
+                        lastLiValue.put(reg, val);
+
+                        // li $reg, 0 -> move $reg, $zero
+                        if (val == 0) {
+                            result.add("\tmove " + reg + ", $zero");
+                            continue;
+                        }
+                    } catch (NumberFormatException e) {
+                        lastLiValue.remove(reg);
+                    }
+                }
+            } else {
+                // 其他指令可能修改寄存器，清除该寄存器的跟踪
+                String[] parts = trimmed.split("[\\s,]+");
+                if (parts.length >= 2 && !parts[0].startsWith("sw") && !parts[0].startsWith("sb")) {
+                    // 目标寄存器通常是第一个操作数（除了 store 指令）
+                    lastLiValue.remove(parts[1]);
+                }
+            }
+
+            result.add(line);
+        }
+        return result;
+    }
+
+    /**
+     * 简单指令调度 - 尝试在 lw 和使用它的指令之间插入独立指令
+     * 减少 load-use 延迟
+     */
+    private static List<String> scheduleInstructions(List<String> lines) {
+        // 简化版：如果发现 lw 后紧跟使用该寄存器的指令，
+        // 尝试将 lw 往前移动（如果前面的指令是独立的）
+        List<String> result = new ArrayList<>();
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            // 寻找模式：lw $dest, ...; 下一条立即使用 $dest
+            if (trimmed.startsWith("lw ") && i + 1 < lines.size()) {
+                String[] parts = trimmed.split("[\\s,]+");
+                if (parts.length >= 2) {
+                    String dest = parts[1];
+                    String next = lines.get(i + 1).trim();
+
+                    // 下一条使用 dest 作为源操作数
+                    if (next.contains(dest) && !next.startsWith("lw ") &&
+                            !next.endsWith(":") && !next.startsWith("sw ")) {
+
+                        // 检查前一条是否可以移到 lw 和 use 之间
+                        if (result.size() > 0) {
+                            String prev = result.get(result.size() - 1).trim();
+                            // 如果前一条是独立的（li, move 到不同寄存器）
+                            if ((prev.startsWith("li ") || prev.startsWith("move ")) &&
+                                    !prev.contains(dest)) {
+                                // 交换：lw 移到前面
+                                String removed = result.remove(result.size() - 1);
+                                result.add(line);
+                                result.add(removed);
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
             result.add(line);
         }
         return result;

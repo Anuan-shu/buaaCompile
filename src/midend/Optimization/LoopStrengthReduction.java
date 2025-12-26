@@ -92,6 +92,7 @@ public class LoopStrengthReduction {
     private void optimizeMultiplications(IrBasicBlock loopHeader, InductionVar iv) {
         // 找到循环体中所有 iv * const 的使用
         List<AluInst> toOptimize = new ArrayList<>();
+        List<GepInstr> gepsToOptimize = new ArrayList<>();
         
         for (IrBasicBlock bb : getLoopBlocks(loopHeader, iv)) {
             for (Instruction instr : bb.getInstructions()) {
@@ -103,6 +104,13 @@ public class LoopStrengthReduction {
                             (alu.getRight() == iv.phi && alu.getLeft() instanceof IrConstInt)) {
                             toOptimize.add(alu);
                         }
+                    }
+                }
+                // 也处理 GEP 指令：gep ptr, iv -> ptr + iv * elementSize
+                if (instr instanceof GepInstr) {
+                    GepInstr gep = (GepInstr) instr;
+                    if (gep.getIndice() == iv.phi) {
+                        gepsToOptimize.add(gep);
                     }
                 }
             }

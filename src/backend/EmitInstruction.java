@@ -442,6 +442,22 @@ public class EmitInstruction {
                         mips.addInst("move " + destReg + ", $zero");
                         optimized = true;
                     }
+                    if (!optimized && val > 0 && (val & (val - 1)) == 0 && val <= 32768) {
+                        int k = Integer.numberOfTrailingZeros(val); // log2(val)
+                        int mask = val - 1;
+                        // 生成正确处理符号的取模代码
+                        mips.addInst("sra $at, " + leftReg + ", 31");
+                        mips.addInst("srl $at, $at, " + (32 - k));
+                        mips.addInst("addu $v1, " + leftReg + ", $at");
+                        if (mask <= 65535) {
+                            mips.addInst("andi " + destReg + ", $v1, " + mask);
+                        } else {
+                            mips.addInst("li $at, " + mask);
+                            mips.addInst("and " + destReg + ", $v1, $at");
+                        }
+                        mips.addInst("subu " + destReg + ", " + destReg + ", $at");
+                        optimized = true;
+                    }
                     // 通用公式: x % c = x - (x / c) * c
                     if (!optimized) {
                         String tempReg = "$v1";

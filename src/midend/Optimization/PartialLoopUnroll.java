@@ -35,8 +35,8 @@ import java.util.*;
  */
 public class PartialLoopUnroll {
     
-    private static final int UNROLL_FACTOR = 2;  // 展开因子
-    private static final int MAX_BODY_INSTRUCTIONS = 20;  // 最大循环体指令数
+    private static final int UNROLL_FACTOR = 4; // 展开因子 (增加)
+    private static final int MAX_BODY_INSTRUCTIONS = 30; // 最大循环体指令数 (增加)
     
     public void run(IrModule module) {
         for (IrFunction func : module.getFunctions()) {

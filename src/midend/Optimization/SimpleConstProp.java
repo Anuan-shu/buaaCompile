@@ -8,6 +8,7 @@ import midend.LLVM.value.IrBasicBlock;
 import midend.LLVM.value.IrFunction;
 import midend.LLVM.value.IrValue;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -25,7 +26,7 @@ public class SimpleConstProp {
             Set<Instruction> dead = new HashSet<>();
 
             for (IrBasicBlock bb : func.getBasicBlocks()) {
-                for (Instruction instr : bb.getInstructions()) {
+                for (Instruction instr : new ArrayList<>(bb.getInstructions())) {
                     if (instr instanceof AluInst) {
                         AluInst alu = (AluInst) instr;
                         IrValue l = alu.getLeft();
@@ -107,6 +108,7 @@ public class SimpleConstProp {
                                         replacement = new IrConstInt(0);
                                         simplified = true;
                                     } // x % 1 = 0, x % -1 = 0
+                                    
                                     break;
                             }
 

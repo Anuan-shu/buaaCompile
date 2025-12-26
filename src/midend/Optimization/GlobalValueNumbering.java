@@ -21,41 +21,60 @@ public class GlobalValueNumbering {
     private DominatorTree domTree;
 
     public void run(IrModule module) {
-        for (IrFunction func : module.getFunctions()) {
-            if (func.getBasicBlocks().isEmpty()) continue;
+        boolean changed = true;
+        int passes = 0;
+        int maxPasses = 5;
 
-            midend.SSA.CfgBuilder.build(func);
-            domTree = new DominatorTree(func);
+        while (changed && passes++ < maxPasses) {
+            changed = false;
+            for (IrFunction func : module.getFunctions()) {
+                if (func.getBasicBlocks().isEmpty())
+                    continue;
 
-            runOnFunction(func);
+                midend.SSA.CfgBuilder.build(func);
+                domTree = new DominatorTree(func);
+
+                if (runOnFunction(func)) {
+                    changed = true;
+                }
+            }
         }
     }
 
-    private void runOnFunction(IrFunction func) {
+    private boolean runOnFunction(IrFunction func) {
         valueTable.clear();
         deadInstructions.clear();
 
-        // 使用支配树获取 RPO 序 (为了保证先处理定义后处理使用)
-
         for (IrBasicBlock bb : func.getBasicBlocks()) {
+            // 每个基本块开始时，清除所有 Load 的 hash（保守处理跨块情况）
+            valueTable.entrySet().removeIf(e -> e.getKey().startsWith("LOAD_"));
+
             for (Instruction instr : bb.getInstructions()) {
+                // 遇到 Store 指令时，使所有 Load hash 失效（保守策略）
+                if (instr instanceof StoreInstr) {
+                    valueTable.entrySet().removeIf(e -> e.getKey().startsWith("LOAD_"));
+                    continue;
+                }
+
+                // 遇到 Call 指令时，使所有 Load hash 失效（函数可能修改内存）
+                if (instr instanceof CallInstr) {
+                    valueTable.entrySet().removeIf(e -> e.getKey().startsWith("LOAD_"));
+                    continue;
+                }
+
                 if (instr.isPinned()) {
-                    continue; // 关键指令不参与 GVN 去重 (除了 Phi，但 Phi 很难 Hash)
+                    continue; // 关键指令不参与 GVN 去重
                 }
 
                 // 尝试 GVN
                 String hash = getHashKey(instr);
-                if (hash == null) continue; // 无法计算 Hash 的指令跳过
+                if (hash == null)
+                    continue;
 
                 if (valueTable.containsKey(hash)) {
-                    // 发现冗余！
                     Instruction leader = valueTable.get(hash);
 
-                    // 只有当 leader 所在的块 支配 当前块时，才能替换
-                    // (如果 leader 和 instr 在同一个块，leader 肯定在前面，因为是顺序遍历的，这也是安全的)
-
                     if (checkDominance(leader, instr)) {
-                        // 只有支配才能替换
                         if (leader != instr) {
                             instr.replaceAllUsesWith(leader);
                             deadInstructions.add(instr);
@@ -71,6 +90,8 @@ public class GlobalValueNumbering {
         for (IrBasicBlock bb : func.getBasicBlocks()) {
             bb.getInstructions().removeIf(deadInstructions::contains);
         }
+
+        return !deadInstructions.isEmpty();
     }
 
     // 生成指令的唯一标识符
@@ -89,7 +110,7 @@ public class GlobalValueNumbering {
                 l = r;
                 r = temp;
             }
-            sb.append(op).append("_").append(l.irName).append("_").append(r.irName);
+            sb.append(op).append("_").append(getValueKey(l)).append("_").append(getValueKey(r));
 
         } else if (instr instanceof CmpInstr) {
             CmpInstr cmp = (CmpInstr) instr;
@@ -102,21 +123,35 @@ public class GlobalValueNumbering {
                 l = r;
                 r = temp;
             }
-            sb.append("CMP_").append(op).append("_").append(l.irName).append("_").append(r.irName);
+            sb.append("CMP_").append(op).append("_").append(getValueKey(l)).append("_").append(getValueKey(r));
 
         } else if (instr instanceof GepInstr) {
             GepInstr gep = (GepInstr) instr;
-            sb.append("GEP_").append(gep.getPtr().irName).append("_").append(gep.getIndice().irName);
+            sb.append("GEP_").append(getValueKey(gep.getPtr())).append("_").append(getValueKey(gep.getIndice()));
 
         } else if (instr instanceof ZextInstr) {
             ZextInstr zext = (ZextInstr) instr;
-            sb.append("ZEXT_").append(zext.getOperand(0).irName);
+            sb.append("ZEXT_").append(getValueKey(zext.getOperand(0)));
+
+        } else if (instr instanceof LoadInstr) {
+            // Load CSE - 安全因为我们在 runOnFunction 中追踪 Store 并清除 hash
+            LoadInstr load = (LoadInstr) instr;
+            IrBasicBlock bb = (IrBasicBlock) load.getParent();
+            sb.append("LOAD_").append(bb.irName).append("_").append(getValueKey(load.getPtr()));
 
         } else {
             return null; // 其他指令暂不支持 GVN
         }
 
         return sb.toString();
+    }
+
+    // 获取值的唯一标识，处理常量
+    private String getValueKey(IrValue val) {
+        if (val instanceof midend.LLVM.Const.IrConstInt) {
+            return "C" + ((midend.LLVM.Const.IrConstInt) val).getValue();
+        }
+        return val.irName;
     }
 
     // 简单的支配检查辅助方法

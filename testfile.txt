@@ -1,91 +1,35 @@
-const int i1 = 1;
-int i2[5] = {1, 1, 1, 1, 1};
-int i3 = 1, i4 = 1;
+// 全局变量声明
+int arr[1024];
 
-int func1()
-{
-    printf("func1\n");
-    return 1;
-}
-
-void func2(int a)
-{
-
-    if (a == 1)
-    {
-        a = 2;
-        if (a == 2)
-        {
-            a = 3;
-        }
-    }
-    else
-    {
-        a = 0;
-    }
-    printf("func2\n");
-}
-int func3(int a)
-{
-    int b = 2;
-    if (a == 1 && a == 2 && func1())
-    {
-    }
-    else
-    {
-        if (b == 2 || func1())
-        {
-            printf("func3\n");
-        }
-    }
-    return 1;
-}
-
-int func4(int a[], int b[])
-{
+// 主函数定义
+int main() {
+    // 变量声明
     int i = 0;
-    for (; i < 10; i = i + 1)
-    {
-        if (1 || func1())
-        {
-            break;
+    int j = 0;
+    int sum = 0;
+    int tmp = 0;
+
+    // 初始化数组，产生一定的 MEM 开销
+    // for 语句
+    for (i = 0; i < 1024; i = i + 1) {
+        arr[i] = i; 
+    }
+
+    // 双重循环构造高 Cycle 数
+    // 外层循环 2000 次
+    for (i = 1; i <= 2000; i = i + 1) {
+        // 内层循环 2000 次
+        // 总迭代次数 = 4,000,000 次
+        for (j = 1; j <= 2000; j = j + 1) {
+       
+            tmp = (i * j) / (i + j);
+            
+            sum = sum + tmp + arr[(i + j) % 1024];
         }
     }
-    printf("%d func4\n", a[0] + b[0]);
-    return a[0] + b[0];
-}
 
-int main()
-{
-    printf("23371234\n");
-    static int s = 10;
-    static int m1 = 20, m2 = 30;
-
-    func1();
-    func2(i1);
-    func3(i3);
-    int mid[5] = {1, 1, 1, 1, 1};
-    func4(i2, mid);
-
-    int x;
-    x = getint();
-    int y = +x;
-    if (y == 1 && (y - 1) == 0 && func1())
-    {
-    }
-    else
-    {
-        printf("no func1\n");
-    }
-
-    if (y % 5 || (y - 1) && (y + 1))
-    {
-        x = 2;
-    }
-    printf("x = %d\n", x);
-    printf("s = %d\n", s);
-    printf("m1 = %d\n", m1);
-    printf("sum = %d\n", s + m1);
+    // 输出结果，防止死代码消除优化
+    printf("%d", sum);
 
     return 0;
 }

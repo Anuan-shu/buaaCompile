@@ -165,6 +165,35 @@ public class LICM {
         if (inst instanceof AllocateInstruction) return false;
         if (inst instanceof PrintStrInstr) return false;
         if (inst instanceof PrintIntInstr) return false;
+
+        // GepInstr 特殊处理：如果基指针是全局变量，可以考虑外提
+        // 但需要检查索引是否是循环不变量
+        if (inst instanceof GepInstr) {
+            GepInstr gep = (GepInstr) inst;
+            IrValue ptr = gep.getPtr();
+            IrValue idx = gep.getIndice();
+
+            // 基指针必须是全局变量（常量地址）
+            if (!(ptr instanceof midend.LLVM.value.IrGlobalValue)) {
+                // 如果基指针是另一个 GEP，检查它是否在循环外
+                if (ptr instanceof Instruction) {
+                    Instruction ptrInst = (Instruction) ptr;
+                    if (loop.body.contains(ptrInst.getParent())) {
+                        return false;
+                    }
+                }
+            }
+
+            // 索引必须是循环不变量
+            if (idx instanceof Instruction) {
+                Instruction idxInst = (Instruction) idx;
+                if (loop.body.contains(idxInst.getParent())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         // 2. 检查所有操作数
         for (IrValue operand : getOperands(inst)) {
             // 常量或全局变量 -> Invariant

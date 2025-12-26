@@ -38,10 +38,14 @@ public class RegisterAllocator {
     // 记录哪些变量跨越了函数调用 (Call Instruction)
     private Set<IrValue> valuesCrossingCalls = new HashSet<>();
 
+    // 记录每个变量的使用次数（用于 spill 决策）
+    private Map<IrValue, Integer> useCount = new HashMap<>();
+
     public Map<IrValue, Integer> run(IrFunction function) {
         allocation.clear();
         valuesCrossingCalls.clear();
         interferenceGraph.clear();
+        useCount.clear();
 
         buildInterferenceGraph(function, new LivenessAnalysis());
         colorGraph();
@@ -91,13 +95,15 @@ public class RegisterAllocator {
                     liveNow.remove(instr);
                 }
 
-                // 2. 处理使用 (Use) - 加入活跃集
+                // 2. 处理使用 (Use) - 加入活跃集并计数
                 // Phi 指令的操作数不在这里加入活跃集
                 // Phi 的操作数是在前驱块的末尾活跃的，而不是当前块。
                 if (!(instr instanceof PhiInstr)) {
                     for (IrValue operand : getOperands(instr)) {
                         if (operand instanceof Instruction || operand instanceof IrParameter) {
                             liveNow.add(operand);
+                            // 统计使用次数
+                            useCount.merge(operand, 1, Integer::sum);
                         }
                     }
                 }
@@ -185,12 +191,16 @@ public class RegisterAllocator {
                     break;
                 }
             }
-            // 否则 spill 度数最大的
+            // 使用 spill cost 启发式：选择 useCount / degree 最小的节点
+            // 这样会优先 spill 使用次数少、邻居多的变量
             if (nodeToRemove == null) {
-                int maxDegree = -1;
+                double minCost = Double.MAX_VALUE;
                 for (IrValue node : nodes) {
-                    if (currentGraph.get(node).size() > maxDegree) {
-                        maxDegree = currentGraph.get(node).size();
+                    int degree = currentGraph.get(node).size();
+                    int uses = useCount.getOrDefault(node, 1);
+                    double cost = (double) uses / Math.max(degree, 1);
+                    if (cost < minCost) {
+                        minCost = cost;
                         nodeToRemove = node;
                     }
                 }

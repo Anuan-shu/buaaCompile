@@ -116,6 +116,10 @@ public class Visitor {
             // 7. 第二轮 Mem2Reg
             mem2Reg.run(IrBuilder.getIrModule());
 
+            // 7.5 Copy Coalescing - 消除冗余 Phi
+            CopyCoalescing copyCoalescing = new CopyCoalescing();
+            copyCoalescing.run(IrBuilder.getIrModule());
+
             // 8. 后续优化
             gvn.run(IrBuilder.getIrModule());
             LICM licm = new LICM();
@@ -126,6 +130,7 @@ public class Visitor {
             // 额外一轮优化以发现更多机会
             simpleConstProp.run(IrBuilder.getIrModule());
             gvn.run(IrBuilder.getIrModule());
+            copyCoalescing.run(IrBuilder.getIrModule()); // 再次运行
             dce.run(IrBuilder.getIrModule());
 
             // 循环强度削减
