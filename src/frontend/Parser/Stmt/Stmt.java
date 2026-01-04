@@ -224,6 +224,9 @@ public class Stmt extends Node {
                     break;
                 }
                 i++;
+                if (this.peekToken(i) == null) {
+                    break;
+                }
             }
             if (flag) {
                 // LVal '=' Exp ';'

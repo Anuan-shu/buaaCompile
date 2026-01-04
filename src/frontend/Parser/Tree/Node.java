@@ -82,7 +82,7 @@ public class  Node {
     public void printToFile() {
         //输出到filename
         try (FileWriter writer = new FileWriter(filename, true)) {
-            //writer.write(token.getType()+" "+token.getLexeme() +"\n");
+            writer.write(token.getType() + " " + token.getLexeme() + "\n");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -104,7 +104,7 @@ public class  Node {
     public void printTypeToFile(){
         //输出节点类型到filename
         try (FileWriter writer = new FileWriter(filename, true)) {
-            //writer.write("<"+this.getTypeName() +">"+"\n");
+            writer.write("<" + this.getTypeName() + ">" + "\n");
         } catch (IOException e) {
             e.printStackTrace();
         }

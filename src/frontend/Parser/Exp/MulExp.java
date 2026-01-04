@@ -52,7 +52,9 @@ public class MulExp extends Node {
     public boolean getExpType() {
         for (int i = 0; i < this.getChildren().size(); i += 2) {
             UnaryExp unaryExp = this.GetChildAsUnaryExpByIndex(i);
-            if (unaryExp.getExpType().equals(SymbolType.CONST_INT_ARRAY) || unaryExp.getExpType().equals(SymbolType.STATIC_INT_ARRAY) || unaryExp.getExpType().equals(SymbolType.INT_ARRAY)) {
+            if (unaryExp.getExpType().equals(SymbolType.CONST_INT_ARRAY)
+                    || unaryExp.getExpType().equals(SymbolType.STATIC_INT_ARRAY)
+                    || unaryExp.getExpType().equals(SymbolType.INT_ARRAY)) {
                 return true;
             }
         }

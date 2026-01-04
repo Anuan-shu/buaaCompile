@@ -59,9 +59,17 @@ public class GlobalSymbolTable {
         int line = constDef.GetLineNumber();
         Symbol symbol = new Symbol(Ident, symbolType, line);
         if (symbolIsArray(symbolType)) {
-            symbol.setSize(constDef.GetArraySize());
+            try {
+                symbol.setSize(constDef.GetArraySize());
+            } catch (Exception e) {
+                // 忽略数组大小计算错误
+            }
         }
-        symbol.setInitValues(constDef.GetInitValues());
+        try {
+            symbol.setInitValues(constDef.GetInitValues());
+        } catch (Exception e) {
+            // 忽略初始值计算错误
+        }
         localSymbolTable.AddSymbol(symbol);
     }
 
@@ -78,9 +86,17 @@ public class GlobalSymbolTable {
         int line = varDef.GetLineNumber();
         Symbol symbol = new Symbol(Ident, symbolType, line);
         if (symbolIsArray(symbolType)) {
-            symbol.setSize(varDef.GetArraySize());
+            try {
+                symbol.setSize(varDef.GetArraySize());
+            } catch (Exception e) {
+                // 忽略数组大小计算错误
+            }
         }
-        symbol.setInitValues(varDef.GetInitValues());
+        try {
+            symbol.setInitValues(varDef.GetInitValues());
+        } catch (Exception e) {
+            // 忽略初始值计算错误（可能引用了未定义的变量）
+        }
         localSymbolTable.AddSymbol(symbol);
     }
 

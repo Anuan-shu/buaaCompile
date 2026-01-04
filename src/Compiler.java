@@ -16,21 +16,21 @@ import java.util.Comparator;
 public class Compiler {
     public static void main(String[] args) {
         String testfile = "testfile.txt";//输入文件
-        String lexerfile = "parser.txt";//输出文件
+        String lexerfile = "lexer.txt";// 输出文件
         String errorfile = "error.txt";//错误文件
 
         try {
             FileInputStream fis = new FileInputStream(testfile);
             Lexer lexer = new Lexer(fis);
             lexer.analyse();
-//          writeTokensToFile(lexerfile,lexer);
-//          writeErrorsToFile(errorfile,lexer);
+            // writeTokensToFile(lexerfile, lexer);
+            // writeErrorsToFile(errorfile, lexer);
             Parser parser = new Parser(lexer.getTokens());
             parser.analyse();
             Visitor visitor = new Visitor(parser.getRoot());
             visitor.Visit();
-//            writeSymbolTableToFile("symbol.txt");
-//            writeAllErrorsToFile(errorfile);
+            // writeSymbolTableToFile("symbol.txt");
+            // writeAllErrorsToFile(errorfile);
             visitor.llvmVisit(true);
             visitor.writeLLVMToFile("llvm_ir.txt");
             Backend backend = new Backend();

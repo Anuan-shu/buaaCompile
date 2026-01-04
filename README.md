@@ -1,5 +1,4 @@
 # 编译器设计文档
-
 ## 参考编译器介绍
 
 [ 编译器示例代码-sysy-compiler](https://judge.buaa.edu.cn/downloadFile?filename=rA93afVaAIXqmACZMFVyM_8zM-ofn7gosegOopUvg1i7E_YmkximGBamkjFOB2B2gTRh6qDhRbpiptyJrPNkGAOljwapkHdnGchT2UajDxO13uttyBsrVrpgtTTSC4zLPfkSmrKIDhc&encname=Eg1N5MasBFec9WC65S3JntDIvUrytCbcS5-hFc9PKZbW-FoT5jZnjg)
@@ -150,7 +149,7 @@ public class BackEnd {
 - `backend`
   - `BackEnd.java`、`PeepHole.java`：后端调度与局部 `peephole `优化。
   - `mips`：目标为 MIPS 的代码生成器（`MipsBuilder`、`MipsModule`、`Register`）以及细分的指令/汇编构造（`assembly` 下的多个类），负责把` IR `翻译为 `MIPS `汇编。
-
+  
 - `error`（错误处理）与 `utils`（工具）
   - `ErrorRecorder/Error/ErrorType`：集中管理编译过程中的错误与诊断信息。
   - `utils `提供 `IO`、调试、配置、复杂度处理等功能。
@@ -235,3 +234,967 @@ public class BackEnd {
    - 包含`ArrayList<Token> tokens`表示传入的`token`流；
    - 包含`ComUnit root`表示初始根节点；
 3. 对于类似`AddExp → MulExp | AddExp ('+' | '−') MulExp`的分析，由于存在左递归，                                                                     将其转化成`MulExp { ('+' | '−') MulExp }`，但是位于运算符左边的成分实际上是`AddExp`而不是`MulExp`，所以如果存在运算符，应在左操作数调用`MulExp`的分析方法后输出成分`<AddExp>`，（仅用于输出，语法树的构造无需额外子节点`AddExp`）。
+
+### 四、语义分析
+
+1. 符号表设计：
+
+   1. `SymbolType`类设计：
+
+      ```java
+         public enum SymbolType {
+             CONST_INT("ConstInt"),
+             CONST_INT_ARRAY("ConstIntArray"),
+             STATIC_INT("StaticInt"),
+             INT("Int"),
+             INT_ARRAY("IntArray"),
+             STATIC_INT_ARRAY("StaticIntArray"),
+             VOID_FUNC("VoidFunc"),
+             INT_FUNC("IntFunc"),
+             ARRAY("Array"),
+             NOT_ARRAY("NotArray"),
+             NOT_EXIST("NotExist");
+             private final String typeName;
+         
+             SymbolType(String typeName) {
+                 this.typeName = typeName;
+             }
+         
+             public String getTypeName() {
+                 return typeName;
+             }
+         }
+      ```
+
+   2. `Symbol`类设计：
+
+      1. `String symbolName`表示符号名称；
+      2. `SymbolType symbolType`表示符号类型：
+      3. `int lineNumber`表示当前符号所在行；
+
+      4. `ArrayList<Symbol> params`若当前符号为函数名，额外标记参数符号列表；
+
+      5. `ArrayList<Integer>initValues`表示当前符号初始赋值；
+
+      6. `int size`若当前符号为数组记录数组大小；
+
+      7. `IrValue IrValue`，中间代码生成时使用，表示符号对应生成的`IrValue`；
+
+   3. `SymbolTable`类设计：
+
+      1. `int depth`表示当前作用域序号（不是深度，只表示创建时顺序）
+      2. `ArrayList<Symbol> symbolList`表示当前作用域中符号；
+      3. `Hashtable<String, Symbol> symbolTable`表示当前作用域中符号方便查找；
+      4. `SymbolTable fatherTable`表示父作用域对应符号表；
+      5. `ArrayList<SymbolTable> sonTables`表示子作用域所含符号表；
+      6. `int index`遍历所有符号表时，表示遍历到子作用域的子符号表索引；
+
+   4. 设计一个`GlobalSymbolTable`类作为全局作用域的符号表；
+
+      1. `SymbolTable globalSymbolTable`表示全局作用域的符号表；
+      2. 设计字段`SymbolTable localSymbolTable`表示当前处理的符号表；
+      3. `int scopeDepth=1`表示作用域序号（不代表深度）；
+
+   5. 额外设计`OutSymbolTable`类，表示全局作用域之外的符号表，方便添加库函数；
+
+2. 主`Visitor`类设计：
+
+   1. `ComUnit comUnit`表示要分析的程序单元；
+
+   2. `Visit()`方法遍历语法树；
+
+      1. 首先通过`OutSymbolTable.addSymbol`添加库函数定义；
+
+         ```java
+         OutSymbolTable.addSymbol(new Symbol("getint", SymbolType.VOID_FUNC,0,
+                 new IrFunction(ValueType.FUNCTION, IrType.INT32, "@getint")));
+         ```
+
+      2. 依次遍历所有声明，函数定义，最后处理主函数；
+
+3. `VisitorDecl`类设计：
+
+   1. ·`Decl → ConstDecl | VarDecl`根据语法规则进行遍历；
+
+   2. 声明调用`GlobalSymbolTable.addVarDef()`或`GlobalSymbolTable.addConstDef()`添加进当前符号表；
+
+      1. `GlobalSymbolTable.add...Def()`方法
+
+      2. 首先获取符号名，符号类型，当前行数创建`Symbol`对象；
+
+      3. 然后依据符号类型判断是否设置数组长度；
+
+      4. 为符号添加初始赋值（无初始值则保持空列表）；
+
+      5. 添加符号进当前符号表；
+
+         ```java
+         public static void addVarDef(VarDef varDef, boolean isStatic) {
+             String Ident = varDef.GetIdent();
+             SymbolType symbolType = varDef.GetSymbolType();
+             ...//静态变量类型转换
+             int line = varDef.GetLineNumber();
+             Symbol symbol = new Symbol(Ident, symbolType, line);
+             if (symbolIsArray(symbolType)) {
+                 symbol.setSize(varDef.GetArraySize());
+             }
+             symbol.setInitValues(varDef.GetInitValues());//为符号添加初始赋值（无初始值则保持空列表）；
+             localSymbolTable.AddSymbol(symbol);
+         }
+         ```
+
+         
+
+   3. `VisitorFuncDef`类设计：
+
+      1. 获取返回值类型标记接下来要处理的块为最外层`Block`；
+      2. 作用域加一，访问函数参数，回到上一级作用域，再添加符号到符号表
+      3. 进入下一级作用域，访问`Block`，访问结束回到上一级作用域；
+      4. `main`函数处理类似，但是不添加符号到符号表；
+
+   4. `VisitorStmt`类设计：
+
+      1. `stmt.isBlock()||stmt.isIfStmt()||stmt.HasElseStmt()||stmt.isForStmt()`分别调用对应的`Visitor`类；
+      2. `stmt.isLVal()`，调用`VisitLVal()`和`VisitExp()`；设计`VisitorLVal`类，可能出现的错误：
+         1. `LVal`为常量时，不能对其修改；`ErrorType.h`
+         2. 变量未定义；`ErrorType.c`
+      3. `stmt.isExp()`调用`VisitExp()`；设计`VisitExp()`，可能出现的错误：
+         1. 函数未定义；`ErrorType.c`；
+         2. 函数调用时无实参，但函数定义有形参;`ErrorType.d`
+      4. `stmt.isReturn()`调用`VisitReturn()`；可能出现的错误：有返回值但不需要`ErrorType.f`；
+      5. `stmt.isBreakContinue()`调用`VisitJump()`；
+         1. 在语法分析阶段设置变量`boolean isForBody`
+         2. 可能出现的错误：非循环块使用`break`和`continue`；`ErrorType.m`；
+      6. `stmt.isPrintf()`调用`VisitPrint()`；可能出现的错误：`%d`数量不匹配；`ErrorType.l`
+
+### 五、中间代码生成
+
+采用`LLVM`作为中间代码
+
+#### IrType设计
+
+`IrType`用来描述`IrValue`的类型；
+
+与`enum`相似，通过`typeName`字段来标识不同类型；
+
+```java
+public static final IrType MODULE = new IrType("module");
+public static final IrType FUNCTION = new IrType("function");
+public static final IrType POINTER = new IrType("pointer");
+public static final IrType BASICBLOCK = new IrType("basicblock");
+public static final IrType VOID = new IrType("void");
+public static final IrType INT1 = new IrType("i1");
+public static final IrType INT8 = new IrType("i8");
+public static final IrType INT32 = new IrType("i32");
+public static final IrType ARRAY = new IrType("array");//array元素默认int32
+public static final IrType STRING = new IrType("string");//string元素默认int8
+private final String typeName;
+```
+
+额外添加`int arraySize`来表示数组类型的数组长度；
+
+对于指针类型`IrType("pointer")`，设计子类`IrPointer`，包含`public IrType targetType;`表示指针指向的类型。如`IrGlobalValue`的类型为`new IrPointer(initial.irType)`；
+
+**注意：对于`array`和`string`类型需要创建新的IrType类而不是直接使用IrType.ARRAY来赋值，因为不同的数组需要赋arraySize的值不同需要新的对象**
+
+为方便处理循环体，额外设计`IrLoop`类，包含四个基本块
+
+```java
+private IrBasicBlock condBlock;
+private IrBasicBlock bodyBlock;
+private IrBasicBlock stepBlock;
+private IrBasicBlock afterBlock;
+```
+
+
+
+#### IrValue设计
+
+我对`IrValue`的理解：对于源程序有语法树，各语法成分有公共父类`Node`，而`IrValue`有点像是对于`LLVM`程序的`Node`类；
+
+**LLVM**由`IrValue`组成，生成`LLVM IR`的过程就是构造各种`IrValue`的过程；
+
+```java
+public final ValueType valueType;// 枚举类（仅用来标识）
+public final IrType irType; // 对于变量/常量表示其类型，对于函数/指令表示返回值类型
+public final String irName; // LLVM中可能会使用的命名
+public final ArrayList<IrUse> useList; // 记录当前IrValue所包含的使用关系（只有被使用者才有内容）
+```
+
+`IrUse`类表示一种使用的关系，即记录了谁使用了谁；
+
+`IrUser`类继承`IrValue`类，表示使用者，包含`ArrayList<IrValue> useValues`表示其使用的值，这也是为什么使用者的`useList`没有添加内容。
+
+##### Instruction类
+
+所有指令的父类，继承`IrValue`类
+
+`InstructionType instrType`表示指令的类型，`IrBasicBlock inBasicBlock`表示当前指令所在的基本块；
+
+```java
+// 添加指令到当前基本块
+public static void addInstr(Instruction instr) {
+    currentBasicBlock.addInstruction(instr);
+    instr.setParentBasicBlock(currentBasicBlock);
+}
+```
+
+指令构造函数中并没有设计自动添加基本块，所以需在`IrBuilder`中显式地为指令添加基本块。
+
+##### IrBasicBlock类
+
+基本块类，同样继承`IrValue`类
+
+`ArrayList<Instruction> instructions;`按顺序记录基本块所含指令；
+
+`IrFunction function;`表示此基本块所属函数（此处函数有点类似于作用域的含义）；
+
+##### IrModule类
+
+与`comUnit`类似，表示`LLVM`的整体。
+
+包含：
+
+```java
+ArrayList<String> declares; // 定义
+ArrayList<IrFunction>functions; // 函数
+ArrayList<IrGlobalValue> globals; // 全局变量/静态变量
+HashMap<String, IrConstString>stringIrConstStringHashMap; // 字符串常量
+```
+
+
+
+#### IrBuilder设计
+
+`IrModule irModule`表示输出的`LLVM IR`单元；
+
+`IrFunction currentFunction`表示当前正在处理的函数；
+
+`IrBasicBlock currentBasicBlock`表示当前正在处理的基本块；
+
+`Stack<IrLoop> loopStack`用来记录循环体的嵌套；
+
+`int basicBlockNum`、`int globalVarNum`、`int stringConstNum`分别记录基本块、全局/静态变量、字符串常量的数目方便命名；
+
+`HashMap<IrFunction, Integer> localVarNum`记录每个函数内的局部变量数目；
+
+所有`Instruction`指令类型的对象都通过`IrBuilder`中`GetNew...()`方法来创建；
+
+
+
+#### 生成过程
+
+与语义分析过程相似，依次遍历所有声明，函数定义，最后处理主函数。与语义分析添加符号到符号表对应的是，在中间代码生成阶段为`Symbol`类中`IrValue IrValue`字段赋予对应的对象。最后重写各`IrValue`的`toString()`方法并依次输出；给出`IrModule`的`toString()`方法：
+
+```java
+public String toString() {
+    StringBuilder sb = new StringBuilder();
+    //输出声明
+    for (String declare : declares) {
+        sb.append(declare).append("\n");
+    }
+    //输出字符串常量
+    List<Map.Entry<String, IrConstString>> stringEntries 
+        = new ArrayList<>(this.stringIrConstStringHashMap.entrySet());
+    for (Map.Entry<String, IrConstString> entry : stringEntries) {
+        sb.append(entry.getValue()).append("\n");
+    }
+    //输出全局变量
+    for (IrGlobalValue global : globals) {
+        sb.append(global).append("\n");
+    }
+    //输出函数
+    for (IrFunction function : functions) {
+        sb.append(function).append("\n");
+    }
+    return sb.toString();
+}
+```
+
+
+
+### 目标代码生成（MIPS）
+
+参考中间代码生成的输出过程，将**MIPS**代码看作一个`MipsModule`类，生成目标代码的过程就是构建`MipsModule`类的过程；
+
+#### `MipsModule`类设计
+
+**MIPS**分为`.data`和`.text`两段内容，分别用`String`列表存储；
+
+```java
+// 存放 .data 段的内容 (全局变量)
+private List<String> dataSection = new ArrayList<>();
+// 存放 .text 段的内容 (指令)
+private List<String> textSection = new ArrayList<>();
+```
+
+覆写`toString()`方法：先输出.data段内容，再输出.text段内容；
+
+```java
+public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(".data\n");
+        for (String s : dataSection) sb.append(s).append("\n");
+        sb.append("\n.text\n");
+        if (Backend.getOptimize()) {
+            List<String> optimizedText = MipsOptimizer.optimize(this.textSection);
+            for (String s : optimizedText) sb.append(s).append("\n");
+        } else {
+            for (String s : textSection) sb.append(s).append("\n");
+        }
+        return sb.toString();
+    }
+```
+
+#### MipsBuilder类
+
+用来构建`MipsModule`类，整体架构为：
+
+1. 处理字符串常量；
+2. 处理全局变量；
+3. 处理函数；
+4. 手动生成库函数；
+
+
+```java
+private static MipsModule mips = new MipsModule();//存储生成的MipsModule类
+```
+
+
+
+记录为`IrValue`分配的栈空间
+
+```java
+private static HashMap<IrValue, Integer> offsetMap = new HashMap<>(); // 记录为IrValue分配的栈空间
+private static int currentFunctionStackSize = 0; // currentFunctionStackSize 记录当前已用的字节数（正数）
+// 给一个 Value 分配栈空间
+private static void allocateStack(IrValue value, int sizeBytes) {
+    // 栈向下增长，所以偏移量是负数
+    currentFunctionStackSize += sizeBytes; // 增加已用字节数
+    offsetMap.put(value, -currentFunctionStackSize); 
+}
+```
+
+
+
+记录数组实体相对于**$fp**的偏移量
+
+```java
+private static HashMap<AllocateInstruction, Integer> allocaArrayOffsets = new HashMap<>();
+```
+
+
+
+寄存器分配优化时使用
+
+```java
+private static RegisterAllocator registerAllocator = new RegisterAllocator();
+```
+
+##### 处理字符串常量
+
+读取`irModule`中所有`IrConstString`类；
+
+**LLVM**中字符串命名`@s_number`；**number**表示数字标号；
+
+**IrConstString**类输出内容为`@s_number = constant [number x i8] c"xxxxxxxx\00"`
+
+1. 将字符串开头的 **@** 符号去除；
+
+   ```java
+   String label = irConstString.irName.substring(1);
+   ```
+
+2. 取` c" `和最后一个` " `之间的内容；
+
+   ```java
+   String rawFull = irConstString.toString();
+   int start = rawFull.indexOf("c\"") + 2;
+   int end = rawFull.lastIndexOf("\"");
+   String content = rawFull.substring(start, end);
+   ```
+
+3. 将**LLVM IR**的 **Hex** 转义符替换为 **MIPS** 的转义符
+
+   ```java
+   // 换行符: \0A -> \n
+   content = content.replace("\\0A", "\\n");
+   
+   // 空字符: \00 -> 空字符串 (.asciiz 会自动补0，所以这里删掉)
+   content = content.replace("\\00", "");
+   
+   // 双引号: \22 -> \"
+   content = content.replace("\\22", "\\\"");
+   
+   // 反斜杠: \5C -> \\
+   content = content.replace("\\5C", "\\\\");
+   ```
+
+4. 拼接汇编指令，给**content**加上双引号加入`MipsModule`；
+
+   ```java
+   String asm = String.format("%s: .asciiz \"%s\"", label, content);
+   mips.addGlobal(asm);
+   ```
+
+##### 处理全局变量
+
+读取`irModule`中所有`IrGlobalValue`类；
+
+**LLVM**中全局变量命名`@g_number`；**number**表示数字标号；
+
+`IrGlobalValue`输出内容为：
+
+`@g_number = dso_local global 类型 initValue`；或静态变量`@g_0 = internal global 类型 initValue`
+
+1. 获取标签名去除@
+
+    ```java
+    String label = global.irName.substring(1);
+    ```
+
+2. 获取初始值，指定按4字节对齐；
+
+    ```java
+    mips.addGlobal(".align 2");
+    ```
+
+3. 处理单个整数的情况`@a = dso_local global i32 10`；
+
+    ```java
+    if (initVal instanceof IrConstInt) {
+        int val = ((IrConstInt) initVal).getValue();
+    	mips.addGlobal(String.format("%s: .word %d", label, val));
+    }
+    ```
+
+4. 处理数组情况`@arr = dso_local global [5 x i32] [i32 1, i32 2, ...]`；
+
+    1. 获取数组总长度，如果数组全是 0 (null 或 显式空) -> 使用 `.space`优化；
+
+        ```java
+        int totalSize = irArray.irType.arraySize;
+        if (elements == null) {
+            mips.addGlobal(String.format("%s: .space %d", label, totalSize * 4));
+            return;
+        }
+        ```
+
+    2. 有具体数值，生成` .word`，先单独输出标签`mips.addGlobal(label + ":");` 
+
+    3. 再输出已有初始值；
+
+        ```java
+        StringBuilder sb = new StringBuilder();
+        int count = 0; // 计数器
+        for (int i = 0; i < elements.size(); i++) {
+            if (count == 0) sb.append(".word "); // 每行开头加 .word
+            IrConstInt constInt = (IrConstInt) elements.get(i);
+            sb.append(constInt.getValue());
+            count++;
+            // 每 50 个元素，或者到了最后一个元素，就换行输出
+            if (count == 50 || (i == elements.size() - 1 && elements.size() == totalSize)) {
+                mips.addGlobal(sb.toString());
+                sb = new StringBuilder(); // 清空 buffer
+                count = 0;
+            } else {
+                sb.append(", ");
+            }
+        }
+        ```
+
+    4. 最后补零；
+
+        ```java
+        // 处理补零逻辑
+        for (int i = elements.size(); i < totalSize; i++) {
+            if (count == 0) sb.append(".word ");
+            sb.append("0");
+            count++;
+            if (count == 50 || i == totalSize - 1) {
+                mips.addGlobal(sb.toString());
+                sb = new StringBuilder();
+                count = 0;
+            } else {
+                sb.append(", ");
+            }
+        }
+        ```
+
+##### 处理函数
+
+首先手动添加跳转`main`函数指令；
+
+```java
+mips.addInst("j main");
+mips.addInst("nop");
+```
+
+读取`irModule`中所有`IrFunction`类；
+
+1. 初始化栈；
+
+   ```java
+   offsetMap.clear();
+   currentFunctionStackSize = 0; // 重置栈计数
+   allocaArrayOffsets.clear(); // 重置 alloca 数组偏移记录
+   Map<IrValue, Integer> regAllocation = new HashMap<>(); // 记录
+   ```
+
+2. 预计算栈空间；
+
+   1. ```java
+      // 为保存寄存器预留空间 ($ra, $fp)
+      // $ra @ -4($fp), $fp @ -8($fp)
+      currentFunctionStackSize += 8; // 目前只记录，具体指令在后面
+      ```
+
+   2. ```java
+      // 为参数分配空间
+      for (IrValue arg : function.getParameters()) {
+          allocateStack(arg, 4); // 每个参数分配 4 字节
+      ```
+
+   3. 为函数体内所有有返回值的指令分配空间；
+
+      ```java
+      for (IrBasicBlock bb : function.getBasicBlocks()) {
+          for (Instruction instr : bb.getInstructions()) {
+              // 如果是 Alloca 指令，需要特殊处理：
+              // 1. 分配指针变量本身的空间 (4字节)
+              // 如果是 alloca 数组，还需要额外在栈上挖一块空地
+              // 比如: %arr = alloca [10 x i32]
+              // 2. 分配数组实体的空间 (N字节)
+              if (instr instanceof AllocateInstruction) {
+                  // 1. 为指针变量 分配 4 字节
+                  allocateStack(instr, 4);
+                  // 2. 为数组实体分配 N 字节
+                  int size = ((AllocateInstruction) instr).getAllocatedSize();
+                  if (size % 4 != 0) {
+                      size += (4 - (size % 4));
+                  }
+                  currentFunctionStackSize += size;
+                  // 3. 记录数组实体相对于 $fp 的偏移量
+                  // 实体位于当前栈底 (也就是 -currentFunctionStackSize)
+                  allocaArrayOffsets.put((AllocateInstruction) instr, -currentFunctionStackSize);
+              } else if (instr instanceof PhiInstr) {
+                  allocateStack(instr, 4);
+              } else if (!instr.irType.isVoid()) {
+                  allocateStack(instr, 4);
+              }
+          }
+      }
+      ```
+
+3. 生成函数序言；
+
+   1. 输出函数标签，去除`@`，替换`_`
+
+      ```java
+      String label = function.irName.substring(1);
+      label = label.replace("@", "").replace(".", "_");
+      mips.addInst("\n" + label + ":");
+      ```
+
+   2. 先建立栈帧指针，再开栈，最后保存寄存器 
+
+      ```java
+      		// 1. 保存旧的 $fp  到当前栈顶下方的预留位
+              mips.addInst("sw $fp, -8($sp)");
+      
+              // 2. 设置新的 $fp (指向当前栈帧的基址，即 Old SP)
+              mips.addInst("move $fp, $sp");
+      
+              // 3. 分配栈空间 (更新 $sp)
+              if (currentFunctionStackSize > 32767) {
+                  // 如果栈太大，不能用立即数，使用 $t0 中转
+                  mips.addInst("li $t0, -" + currentFunctionStackSize);
+                  mips.addInst("addu $sp, $sp, $t0");
+              } else {
+                  // 栈较小，直接用 addiu
+                  mips.addInst("addiu $sp, $sp, -" + currentFunctionStackSize);
+              }
+      
+              // 4. 保存 $ra
+              // 注意：此时已分配空间，使用 $fp 寻址 (因为 $fp == Old SP)
+              if (!isLeaf) {
+                  mips.addInst("sw $ra, -4($fp)");
+              }
+      
+              // 5. 保存 Callee-Saved 寄存器 ($sX)
+              int extraSaveSize = 0;
+              // 建立一个 map 传给 EmitInstruction，用于函数返回时恢复寄存器
+              Map<Integer, Integer> sRegStackOffsets = new HashMap<>();
+      ```
+
+   3. 保存参数
+
+      1. ```java
+         // 辅助方法：处理大偏移量的 sw
+             private static void saveToStackOrReg(String srcReg, int offset, boolean useFp) {
+                 if (offset >= -32768 && offset <= 32767) {
+                     mips.addInst("sw " + srcReg + ", " + offset + "($fp)");
+                 } else {
+                     mips.addInst("li $at, " + offset);
+                     mips.addInst("addu $at, $fp, $at");
+                     mips.addInst("sw " + srcReg + ", 0($at)");
+                 }
+             }
+         ```
+
+      2. 四个参数以内直接存入栈；
+
+      3. 大于四个参数，先计算参数位置并加载到临时寄存器，之后移入栈；
+
+      ```java
+                  // 检查参数是否被分配到了寄存器
+                  Integer allocatedReg = regAllocation.get(arg);
+                  if (i < 4) {
+                      if (allocatedReg != null) {
+                          // 优化：直接移入分配的寄存器 $sX
+                          mips.addInst("move " + RegisterAllocator.REG_NAMES[allocatedReg] + ", $a" + i);
+                      } else {
+                          // 未分配寄存器：存入栈
+                          saveToStackOrReg("$a" + i, offset, true);
+                      }
+                  } else {
+                      // 1. 计算该参数在 Caller 栈帧中的位置
+                      // 第5个参数在 0(Old $sp)，即 0($fp) 第6个参数在 4($fp)...
+                      int callerOffset = (i - 4) * 4;
+      
+                      // 2. 从 Caller 栈帧加载参数到临时寄存器 $t0
+                      // 注意：这里是正偏移，访问的是 Caller 放置参数的区域
+                      mips.addInst("lw $t0, " + callerOffset + "($fp)");
+      
+                      // 3. 将参数保存到当前函数的局部栈帧
+                      // offset 是 Step 1 分配的负偏移量
+                      // 后续指令访问 %arg 时，统一去 offset($fp) 读取
+                      if (allocatedReg != null) {
+                          mips.addInst("move " + RegisterAllocator.REG_NAMES[allocatedReg] + ", $t0");
+                      } else {
+                          saveToStackOrReg("$t0", offset, true);
+                      }
+                  }
+              }
+      ```
+
+4. 遍历基本块
+
+   1. 函数相关信息传入`EmitInstruction`类，之后调用emit()方法处理基本块中指令；
+
+   2. 遍历函数内基本块，再遍历基本块内指令；
+
+      ```java
+      		for (IrBasicBlock bb : function.getBasicBlocks()) {
+                  String bbLabel = bb.irName.replace("@", "").replace(".", "_");
+                  // 生成块标签 (block_name:)
+                  mips.addInst(label + "_" + bbLabel + ":");
+      
+                  for (Instruction instr : bb.getInstructions()) {
+                      // 调用指令翻译器
+                      emitter.emit(instr, optimize, isLeaf);
+                  }
+              }
+      ```
+
+      
+
+#### EmitInstruction类
+
+必要变量：
+
+```java
+private final MipsModule mips;
+private final HashMap<IrValue, Integer> offsetMap; // 记录为IrValue分配的栈空间
+private final String currentFuncLabel;// 当前函数的名字（用于拼接跳转标签）
+private final HashMap<AllocateInstruction, Integer> allocaArrayOffsets; // alloc数组时记录为数组实体分配的空间
+private boolean optimize = false; // 是否开启优化
+private boolean isLeaf = false; // 是否为叶子函数
+private final Map<IrValue, Integer> regAllocation; // 记录为IrValue分配的寄存器
+private final Map<Integer, Integer> sRegStackOffsets; // 用于 epilogue 恢复
+```
+
+`emit()`方法：解析每个指令，并调用解析对应指令的方法；
+
+1. **loadToReg(IrValue val, String reg)**：
+
+   1. 检查 `regAllocation`，若变量已在寄存器中，且目标寄存器与源寄存器不同，生成 move；若相同则跳过。
+   2. 常量/全局处理：若为立即数生成 `li`，若为全局变量/字符串生成 `la`。
+   3. 栈加载：若变量在栈上，根据 `offsetMap` 生成` lw`。
+
+2. **saveReg(IrValue dest, String srcReg)**：
+
+   1. 若目标变量分配了寄存器并且目标寄存器与源寄存器不同，生成 move。
+   2. 若目标变量未分配寄存器，生成 sw 写入栈帧。
+
+3. **emitBinary(AluInst instr)**：根据运算符生成对应指令，之后保存结果
+
+   ```java
+   mips.addInst(String.format("addu %s, %s, %s", destReg, leftReg, rightReg));
+   saveReg(instr, destReg);
+   ```
+
+4. **emitLoad(LoadInstr instr)**：调用`loadToReg()`
+
+   ```java
+   mips.addInst("lw $t0, 0($t1)"); // 从地址 $t1 处读取真实的值
+   saveReg(instr, "$t0");          // 把值存入 %val 的栈槽
+   ```
+
+5. **emitStore(StoreInstr instr)**：
+
+   ```java
+   loadToReg(val, "$t0"); // 加载要存储的数据
+   loadToReg(ptr, "$t1"); // 加载目标地址
+   mips.addInst("sw $t0, 0($t1)"); // 写入内存
+   ```
+
+6. **emitIcmp(CmpInstr instr)**：与`emitBinary()`同理，先加载操作数，然后根据运算符生成指令，最后保存结果；
+
+7. **emitBr(BranchInstr instr)**：只处理条件跳转的情况，获取`currentBlock`、`trueBlock`、`falseBlock`三个基本块的名字，之后对不同情况生成跳转；
+
+   ```java
+   // 如果 $t0 == 0 (即不满足条件)，跳过 j trueLabel指令
+   mips.addInst("beqz $t0, " + skipLabel);
+   mips.addInst("nop");
+   // 处理 True 块的 Phi
+   resolvePhiCopies(trueBlock, currentBlock);
+   // 只有满足条件才执行这个长跳转
+   mips.addInst("j " + trueLabel);
+   mips.addInst("nop");
+   mips.addInst(skipLabel + ":");
+   // 处理 False 块的 Phi
+   resolvePhiCopies(falseBlock, currentBlock);
+   // 否则跳转 falseLabel
+   mips.addInst("j " + falseLabel);
+   mips.addInst("nop");
+   ```
+
+8. **emitJump(JumpInstr instr)**：获取基本块名，处理Phi指令，生成跳转；
+
+9. **emitCall(CallInstr instr)**：首先获取形参，进行栈对齐；之后生成移动栈指针的指令
+
+   ```java
+   if (stackArgs > 0) mips.addInst("addiu $sp, $sp, -" + (stackArgs * 4));
+   ```
+
+   再将每一个参数存入寄存器，形参个数大于4时依次从栈顶开始存入；
+
+   ```java
+   			if (i < 4) {
+                   loadToReg(arg, "$a" + i);
+               } else {
+                   loadToReg(arg, "$t0");
+                   mips.addInst(String.format("sw $t0, %d($sp)", (i - 4) * 4));
+               }
+   ```
+
+   生成`jal`指令调用函数，恢复栈指针，如果函数有返回值则保存；
+
+   ```java
+   mips.addInst("jal " + funcName);
+   mips.addInst("nop");
+   if (stackArgs > 0) mips.addInst("addiu $sp, $sp, " + (stackArgs * 4));
+   if (!instr.irType.isVoid()) saveReg(instr, "$v0");
+   ```
+
+10. **emitRet(ReturnInstr instr)**：
+
+    1. 若返回值非 `void`，将返回值加载到 `$v0`；
+    2. 若是 `main` 函数，生成 `li $v0, 10` 和 `syscall` 结束程序；
+    3. 若非 `main` 函数，执行：
+       - 根据 `sRegStackOffsets` 恢复被被调用者保存的寄存器；
+       - 恢复栈指针 `$sp` 和帧指针 `$fp`；
+       - 若非叶子函数，恢复返回地址 `$ra`；
+       - 生成 `jr $ra` 跳转指令。
+
+11. **emitAlloca(AllocateInstruction instr)**：
+
+    1. 从 `allocaArrayOffsets` 获取数组实体在栈上的偏移量；
+    2. 计算数组实体的绝对地址（`$fp + offset`），若偏移量过大则使用 `$at` 寄存器中转；
+    3. 将计算出的绝对地址存入该指针变量对应的栈槽中（即存储“指向数组的指针”）。
+
+12. **emitZext(ZextInstr instr)**：将操作数加载到寄存器，生成`andi $t0, $t0, 1` 确保高位清零，保存结果。
+
+13. **emitGEP(GepInstr instr)**：
+
+    1. 加载基地址（`Base`）和索引（`Index`）到寄存器；
+    2. 计算偏移量：将索引左移 2 位（`sll $t1, $t1, 2`，即乘以 4）；
+    3. 地址相加：`addu $t2, $t0, $t1`；
+    4. 保存计算结果到目标寄存器/栈。
+
+14. **IO指令处理 (PrintInt/PrintStr)**：
+
+    1. **PrintInt**：将待打印值加载到 `$a0`，设置 `$v0` 为 1，执行 `syscall`；
+    2. **PrintStr**：将字符串地址加载到 `$a0`，设置 `$v0` 为 4，执行 `syscall`。
+
+15. **emitTrunc(TruncInstr instr)**：
+
+    1. **i32转换i1**：生成 `andi $t0, $t0, 1` 保留最低位；
+    2. **i32转换成i8**：生成 `andi $t0, $t0, 255` 保留低 8 位；
+    3. 保存截断后的结果。
+
+16. **Phi指令消除 (resolvePhiCopies)**：在跳转指令（`Branch/Jump`）生成前调用；
+
+    1. 遍历目标块中的所有 `Phi` 指令，找到来自当前块的值；
+
+    2. 防止覆盖：利用栈作为临时中转。先将所有需要传递的值压栈；
+
+       ```java
+       loadToReg(values.get(i), "$t0");
+       mips.addInst("addiu $sp, $sp, -4");
+       mips.addInst("sw $t0, 0($sp)");
+       ```
+
+    3. 再按顺序弹栈并保存到 `Phi` 指令对应的目的操作数位置。
+
+       ```java
+       mips.addInst("lw $t0, 0($sp)");
+       mips.addInst("addiu $sp, $sp, 4");
+       saveReg(phi, "$t0");
+       ```
+
+
+## 静态单赋值形式的构建
+
+### 1.1 Phi 节点的正确插入与维护
+
+SSA 的核心在于每个变量只被赋值一次。将普通 IR 转换为 SSA 形式（Mem2Reg）。
+
+- **难点**：如何准确地在控制流汇聚点插入 Phi 节点，以及如何在后续的优化（如循环展开、内联）中维护 Phi 节点的正确性。特别是在复杂的控制流图中，一旦支配关系计算错误，Phi 节点就会出错，导致整个程序逻辑崩溃。
+- **解决方案**：
+  - **支配树**：我首先实现了构建支配树和计算支配边界。
+  - **变量重命名**：在 `Mem2Reg` 阶段，利用支配树进行 DFS 遍历，维护一个版本栈来替换所有的 Load/Store 指令，从而消除栈上的局部变量内存访问。
+
+### 1.2 复制代码合并
+
+- **难点**：SSA 构造或变换过程中会产生冗余的 Phi 节点。 
+
+- **解决方案**：
+  - 实现 `canCoalesce` 方法，检测 Phi 节点是否单源或仅包含自身引用；
+  - 如果满足条件，直接用该单一值替换 Phi 的所有使用，并移除该 Phi 节点。
+
+## 中端优化
+
+基于 LLVM 风格的 IR，我实现了大量的机器无关优化。其中 GVN 和 GCM 是提升最大的两个点，也是实现难度最高的。
+
+### 2.1 全局值编号
+
+GVN 旨在消除冗余计算，比如多次计算相同的表达式。
+
+- **难点**：**内存依赖的处理**。虽然计算指令（如 `add`, `mul`）是纯函数，但 `load` 指令的结果依赖于内存状态。如果简单的认为 `load %a` 和之前的 `load %a` 等价，就会忽略中间可能的 `store` 指令对内存的修改。
+- **解决方案**：
+  - 采用**哈希表**记录已计算的指令。对于 `add a, b`，生成如 `ADD_val(a)_val(b)` 的 Hash Key。
+  - **保守的内存分析**：在处理基本块时，一旦遇到 `Store` 指令或 `Call` 指令（函数调用可能有副作用），则立即清除哈希表中所有与 `Load` 相关的条目。虽然这是一种保守策略，但它保证了绝对的正确性，避免了复杂的别名分析带来的风险。
+
+### 2.2 全局代码移动
+
+GCM 结合了死代码消除和指令调度，将指令移动到执行频率最低的地方。
+
+- **难点**：**如何确定指令的最佳位置**。这需要平衡“尽早执行”和“尽可能晚执行”。同时，移动指令不能破坏数据依赖。
+- **解决方案**：
+  - 通过 DFS 遍历 Use-Def 链，将指令“下沉”到其操作数所在的支配树最深层节点的支配节点，确保操作数已定义。
+  - 通过 Use-Def 链反向遍历，找到所有使用该指令的地方的最近公共祖先，这是指令能“上浮”到的最晚位置。
+  - 在 Early 和 Late 之间的路径上，选择循环嵌套深度最小的 BasicBlock 作为指令的最终归宿。这极大地减少了循环内的计算量。
+
+### 2.3 循环强度削减
+
+- **难点**：正确识别归纳变量的模式。
+- **解决方案**：我实现了一个模式匹配器，专门识别 `phi(init, add(phi, step))` 形式的指令。一旦识别出归纳变量 `i`，就可以搜索所有 `i * C` 的乘法指令，将其替换为新的归纳变量 `j = j + step * C`，从而将乘法强度削减为加法。
+
+### 2.4 循环不变量外提
+
+- **难点**：
+
+  - **循环识别**：需要准确识别自然循环，即找到回边和支配关系。
+
+  - **副作用检查**：不能随意移动可能产生副作用（如 `Call`, `Store`）或异常（如除零）的指令。
+
+  - **PreHeader 的缺失**：循环头可能有多个前驱，直接插入指令会破坏控制流。 
+
+- **解决方案**：
+  - **构建 PreHeader**：如果循环头有多个循环外前驱，通过 `getOrCreatePreHeader` 动态插入一个新的基本块作为循环前置首部，专门用于放置外提的指令。
+  - **不变量分析**：实现 `isInvariant`，检查指令的操作数是否均为常量或定义在循环体之外。
+  - **别名分析**：对于 `Load` 和 `Gep` 指令，需保守判断其基地址是否可能在循环内被修改。
+
+### 2.5 简单的循环展开
+
+- **场景**：针对循环次数在编译期可知的简单循环。 
+
+- **难点**：
+
+  - **归纳变量分析**：需要解析 `i = phi(init, next)` 和 `cmp i, bound` 模式来计算迭代次数。
+
+  - **值映射维护**：展开时通过 `valueMap` 将上一轮迭代的输出映射到下一轮的输入，特别是处理跨迭代的 Phi 节点依赖。 
+
+- **解决方案**：
+  - 设定 `MAX_TRIP_COUNT` 和 `MAX_INSTRUCTIONS_THRESHOLD` 阈值防止代码膨胀。
+  - 彻底移除原循环头，将循环体复制 N 次并线性连接，消除分支跳转开销。
+
+### 2.6 部分循环展开 
+
+- **场景**：循环次数未知，但希望利用指令流水线并行性。
+
+-  **实现**：
+
+  - 将循环体复制 `UNROLL_FACTOR`次。
+
+  - 在每次复制中更新归纳变量（如 `i`, `i+1`, `i+2`, `i+3`）。
+
+- **难点**：处理剩余迭代。本实现采用了较为激进的策略，直接在循环体内复制指令，依赖后续的指令调度或由硬件处理。
+
+### 2.7 简单的常量传播与折叠
+
+在编译期计算出结果为常量的表达式。 **实现细节**：
+
+- **常量折叠**：检测二元运算（`AluInst`）的左右操作数，若均为 `IrConstInt`，则直接计算结果并替换。
+- **代数简化**：利用代数恒等式优化指令，例如 `x + 0 -> x`, `x * 1 -> x`, `x * 0 -> 0`, `x - x -> 0` 等。这能有效减少由宏展开或数组地址计算产生的冗余计算。
+
+### 2.8 数组标量化
+
+- **难点**：LLVM IR 中数组操作通常涉及 `Gep` 指令，导致别名分析困难。对于局部的小数组，如果不进行处理，后续优化无法穿透数组进行常量传播。 
+
+- **解决方案**：
+  - **适用性检查**：只针对仅通过常量下标访问的局部数组。
+  - **标量替换**：将数组 `int a[N]` 拆分为 `N` 个独立的标量变量 `a_0, a_1, ... a_N-1`。
+  - **指令重写**：遍历数组的所有 `Gep` 使用者，根据常量下标将 `load/store` 重定向到对应的标量变量上。这使得 `Mem2Reg` 后续可以将这些数组元素提升到寄存器。
+
+## 后端优化：寄存器分配与指令选择
+
+### 3.1 图着色寄存器分配
+
+- **难点**：**S 寄存器与 T 寄存器**。在函数调用频繁的代码中，T 寄存器需要在调用前保存，代价高昂；而 S 寄存器虽然需要保存，但在跨越调用的生命周期中更划算。
+- **解决方案**：
+  - **活跃度分析：准确计算每个变量的活跃区间。
+  - **跨调用检测**：在构建冲突图时，额外标记那些“活跃区间跨越了 Call 指令”的变量。
+  - **优先策略**：在着色阶段，强制要求这些“跨调用变量”优先分配到 `$s0-$s7` 寄存器。如果 `$s` 耗尽，再考虑 Spill。
+  - **溢出代价估算**：当必须 Spill 时，选择溢出代价最小的变量。我采用了 `UseCount / Degree` 的启发式算法，优先溢出使用次数少且冲突多的变量。
+
+### 3.2 窥孔优化
+
+生成的汇编代码往往存在冗余，我在生成汇编后进行多轮文本层面的扫描和替换。
+
+- **难点**：**移动指令链的消除**。简单的 `move $t0, $t1` 消除很容易，但像 `move $t1, $t0; ...; move $t0, $t1` 这样的链条处理起来就很麻烦，需要确保 `$t1` 在中间没有被修改。
+- **解决方案**：
+  - 实现了一个多轮迭代的优化器。
+  - **追踪机制**：在“激进内存消除”中，我维护了 `Addr -> Reg` 和 `Reg -> Addr` 的双向映射。当遇到 `lw $t0, addr` 时，如果 `addr` 的值已经在某个寄存器 `$t1` 中，直接替换为 `move $t0, $t1`，甚至如果 `$t0` 本身就持有该值，直接删除指令。
+  - **代数化简**：针对 MIPS 指令集特性，实现了如 `mergeLiAddu`（将 `li` + `addu` 合并为 `addiu`）、`removeRedundantJumps`（删除指向下一行的跳转）等特定优化。
+
+### 3.3 尾调用优化
+
+ 将递归调用转化为循环跳转，避免栈帧增长。 
+
+检查基本块末尾是否为 `Call` 紧接 `Return`，且调用目标为自身。
+
+- 在函数入口块为参数插入 Phi 节点。
+- 在尾调用处，不执行 Call，而是更新这些 Phi 节点的 `Incoming Value` 为本次调用的实参。
+- 将 `Call + Return` 替换为指向 Entry Block 的 `Jump` 指令。
+
+## 总结
+
+本学期的编译技术课程不仅让我掌握了编译原理的理论知识，更重要的是通过编译器的开发，锻炼了处理复杂逻辑、设计高效算法以及进行系统级调试的能力。从最初只能生成简单代码，到最终实现包含 SSA、循环变换、内联优化等高级特性的优化编译器，这一过程极大地提升了我的计算机系统素养。
+
+
+
+
+
