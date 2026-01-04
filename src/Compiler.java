@@ -31,10 +31,10 @@ public class Compiler {
             visitor.Visit();
             // writeSymbolTableToFile("symbol.txt");
             // writeAllErrorsToFile(errorfile);
-            visitor.llvmVisit(true);
+            visitor.llvmVisit(false);
             visitor.writeLLVMToFile("llvm_ir.txt");
             Backend backend = new Backend();
-            backend.generateMips(true);
+            backend.generateMips(false);
             backend.writeMipsToFile("mips.txt");
         } catch (Exception e) {
             e.printStackTrace();

@@ -345,37 +345,33 @@ public class EmitInstruction {
                     magic = 0x2AAAAAABL;
                     shift = 0;
                     break;
-                case 7:
-                    magic = 0x92492493L;
-                    shift = 2;
-                    break;
-                case 9:
-                    magic = 0x38E38E39L;
-                    shift = 1;
-                    break;
                 case 10:
                     magic = 0x66666667L;
                     shift = 2;
-                    break;
-                case 11:
-                    magic = 0x2E8BA2E9L;
-                    shift = 1;
                     break;
                 case 12:
                     magic = 0x2AAAAAABL;
                     shift = 1;
                     break;
-                case 25:
-                    magic = 0x51EB851FL;
+                case 20:
+                    magic = 0x66666667L;
+                    shift = 3;
+                    break;
+                case 24:
+                    magic = 0x2AAAAAABL;
+                    shift = 2;
+                    break;
+                case 40:
+                    magic = 0x66666667L;
+                    shift = 4;
+                    break;
+                case 48:
+                    magic = 0x2AAAAAABL;
                     shift = 3;
                     break;
                 case 100:
                     magic = 0x51EB851FL;
                     shift = 5;
-                    break;
-                case 1000:
-                    magic = 0x10624DD3L;
-                    shift = 6;
                     break;
                 default:
                     return false;
@@ -436,7 +432,8 @@ public class EmitInstruction {
                 }
             } else if (instr.getOp().equals("SREM")) {
                 // 优化 x % c
-                if (val != 0) {
+                if (optimize) {
+                    if (val != 0) {
                     // 特殊情况 1: x % 1 = 0
                     if (val == 1 || val == -1) {
                         mips.addInst("move " + destReg + ", $zero");
@@ -468,6 +465,28 @@ public class EmitInstruction {
                                 mips.addInst("mul " + tempReg + ", " + tempReg + ", $at");
                             }
                             mips.addInst(String.format("subu %s, %s, %s", destReg, leftReg, tempReg));
+                            optimized = true;
+                        }
+                    }
+                }
+            }
+            if (!optimize) {
+                if (val != 0) {
+                    String tempReg = "$v1";
+
+                    // 第一步：计算 quotient = x / c
+                    if (tryOptimizeDiv(val, leftReg, tempReg)) {
+                        // 计算 product = quotient * c
+                        boolean mulOptimized = tryOptimizeMul(val, tempReg, tempReg);
+                        // 乘法没能优化，回退到硬件乘法
+                        if (!mulOptimized) {
+                            mips.addInst("li $at, " + val);
+                            mips.addInst("mul " + tempReg + ", " + tempReg + ", $at");
+                        }
+
+                        // 第三步：计算 remainder = x - product
+                        mips.addInst(String.format("subu %s, %s, %s", destReg, leftReg, tempReg));
+
                             optimized = true;
                         }
                     }
@@ -563,6 +582,14 @@ public class EmitInstruction {
 
     // 2. Load 指令: %val = load i32, i32* %ptr
     private void emitLoad(LoadInstr instr) {
+        if (!optimize) {
+            IrValue ptr = instr.getPtr();
+            loadToReg(ptr, "$t1");
+
+            mips.addInst("lw $t0, 0($t1)"); // 从地址 $t1 处读取真实的值
+            saveReg(instr, "$t0"); // 把值存入 %val 的栈槽
+            return;
+        }
         IrValue ptr = instr.getPtr();
 
         // 确定结果寄存器
@@ -583,6 +610,16 @@ public class EmitInstruction {
     }
 
     private void emitStore(StoreInstr instr) {
+        if (!optimize) {
+            IrValue val = instr.getVal();
+            IrValue ptr = instr.getPtr();
+
+            loadToReg(val, "$t0"); // 加载要存储的数据
+            loadToReg(ptr, "$t1"); // 加载目标地址
+
+            mips.addInst("sw $t0, 0($t1)"); // 写入内存
+            return;
+        }
         IrValue val = instr.getVal();
         IrValue ptr = instr.getPtr();
 
@@ -596,6 +633,39 @@ public class EmitInstruction {
     // 4. cmp 指令
     // MIPS 没有类似 LLVM 的 i1 类型，用 0 和 1 整数表示
     private void emitIcmp(CmpInstr instr) {
+        if (!optimize) {
+            loadToReg(instr.getLeft(), "$t0");
+            loadToReg(instr.getRight(), "$t1");
+
+            switch (instr.getOp()) {
+                case "EQ": // ==
+                    mips.addInst("xor $t2, $t0, $t1"); // 若相等，异或为0
+                    mips.addInst("sltiu $t2, $t2, 1"); // 若 $t2 < 1 (即为0)，则置1
+                    break;
+                case "NE": // !=
+                    mips.addInst("xor $t2, $t0, $t1");
+                    mips.addInst("sltu $t2, $zero, $t2"); // 若 0 < $t2，则置1
+                    break;
+                case "GT": // >
+                    mips.addInst("slt $t2, $t1, $t0"); // if t1 < t0, t2 = 1
+                    break;
+                case "GE": // >= (t0 >= t1 <==> !(t0 < t1))
+                    mips.addInst("slt $t2, $t0, $t1"); // check t0 < t1
+                    mips.addInst("xori $t2, $t2, 1"); // 取反
+                    break;
+                case "LT": // <
+                    mips.addInst("slt $t2, $t0, $t1");
+                    break;
+                case "LE": // <= (t0 <= t1 <==> !(t1 < t0))
+                    mips.addInst("slt $t2, $t1, $t0");
+                    mips.addInst("xori $t2, $t2, 1");
+                    break;
+                default:
+                    break;
+            }
+            saveReg(instr, "$t2");
+            return;
+        }
         String leftReg = getOpReg(instr.getLeft(), "$t0");
         String rightReg = getOpReg(instr.getRight(), "$t1");
 
@@ -651,7 +721,7 @@ public class EmitInstruction {
         IrValue cond = instr.getCond();
 
         // 优化：如果条件是 CmpInstr，直接使用 beq/bne
-        if (cond instanceof CmpInstr) {
+        if (optimize && cond instanceof CmpInstr) {
             CmpInstr cmp = (CmpInstr) cond;
             String leftReg = getOpReg(cmp.getLeft(), "$t0");
             String rightReg = getOpReg(cmp.getRight(), "$t1");
